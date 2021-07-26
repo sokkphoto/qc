@@ -1,10 +1,10 @@
 class GreenMuleZoneRec(QCAlgorithm):
 
     def Initialize(self):
-
+        
         self.SetCash(1000)
         self.SetStartDate(2017, 5, 1)
-        self.SetEndDate(2017, 5, 31)
+        self.SetEndDate(2017, 5, 15)
         self.pair = self.AddForex("AUDUSD", Resolution.Hour, Market.Oanda).Symbol
         self.SetBrokerageModel(BrokerageName.OandaBrokerage)
         
@@ -15,7 +15,12 @@ class GreenMuleZoneRec(QCAlgorithm):
         self.orderQuantity = 1000
         self.slPips = 100
         self.tpPips = 50
-    
+        
+        self.trades = {'rec0': '', 'slRec0': '', 'tpRec0': '',
+            'rec1': '', 'slRec1': '', 'tpRec1': '',
+            'rec2': '', 'slRec2': '', 'tpRec2': '',
+        }
+
         
     def OnData(self, data):
         if not self.sma.IsReady or self.pair not in data:
@@ -31,44 +36,36 @@ class GreenMuleZoneRec(QCAlgorithm):
         
         if not self.Portfolio.Invested:
             self.recTrade(0, firstPosition)
+            self.Log('trades: ' + str(self.trades))
             
         # cancel all orders if a TP is hit
-        elif self.tpRec0.Status == OrderStatus.Filled or self.tpRec1.Status == OrderStatus.Filled or self.tpRec2.Status == OrderStatus.Filled:
-            self.Transactions.CancelOpenOrders(self.pair)
         
+        # can't use dict to store orders :(
+        # Runtime Error: AttributeError : 'str' object has no attribute 'Status' at OnData elif self.trades['tpRec0'].Status == OrderStatus.Filled
+        elif self.trades['tpRec0'].Status == OrderStatus.Filled or self.trades['tpRec1'].Status == OrderStatus.Filled or self.trades['tpRec2'].Status == OrderStatus.Filled:
+            self.Transactions.CancelOpenOrders(self.pair)
         # open recovery trades
-        elif self.slRec0.Status == OrderStatus.Filled:
-            self.tpRec0.Cancel()
+        elif self.trades[slRec0].Status == OrderStatus.Filled:
+            self.trades[tpRec0].Cancel()
             self.recTrade(1, (2 * (- firstPosition)))
-        elif slRec1.Status == OrderStatus.Filled:
-            self.tpRec1.Cancel()
+        elif self.trades[slRec1].Status == OrderStatus.Filled:
+            self.trades[tpRec1].Cancel()
             self.recTrade(2, (4 * firstPosition))
-        elif slRec2.Status == OrderStatus.Filled:
-            self.tpRec2.Cancel()
+        elif self.trades[slRec2].Status == OrderStatus.Filled:
+            self.trades[tpRec2].Cancel()
             self.recTrade(3, (8 * (- firstPosition)))
 
 
     def recTrade(self, recNum, position):
-        recTag = str("rec" + (f'{recNum}'.split('=')[0]))
-        slRecTag = str("slRec" + (f'{recNum}'.split('=')[0]))
-        tpRecTag = str("tpRec" + (f'{recNum}'.split('=')[0]))
         
-        (globals()[recTag]) = self.MarketOrder(self.pair, position)
-        self.Log("Trade " + str(recNum) + " at " + str(self.price))
-        (globals()[slRecTag]) = self.StopMarketOrder(self.pair, -self.orderQuantity, (self.price - (self.slPips / 10000)))
-        (globals()[tpRecTag]) = self.LimitOrder(self.pair, -self.orderQuantity, (self.price + (self.slPips / 10000)))
-        self.Log("SL " + str(recNum) + " at " + str(self.price - (self.slPips / 10000)) + " | TP " + str(recNum) + " at " 
-                                + str(self.price + (self.tpPips / 10000)))
+        self.trades[str("rec" + str(recNum))] = self.MarketOrder(self.pair, position)
+        self.trades[str("slRec" + str(recNum))] = self.StopMarketOrder(self.pair, -self.orderQuantity, (self.price - (self.slPips / 10000)))
+        self.trades[str("tpRec" + str(recNum))] = self.LimitOrder(self.pair, -self.orderQuantity, (self.price + (self.slPips / 10000)))
         
-        self.rec0 = rec0
-        self.slRec0 = slRec0
-        self.tpRec0 = tpRec0
-        self.rec1 = rec1
-        self.slRec1 = slRec1
-        self.tpRec1 = tpRec1
-        self.rec2 = rec2
-        self.slRec2 = slRec2
-        self.tpRec2 = tpRec2
+        self.Log("rec" + str(recNum) + " at " + str(self.price) + " | " + 
+                "slRec" + str(recNum) + " at " + str(self.price - (self.slPips / 10000)) + " | " +
+                "tpRec" + str(recNum) + " at " + str(self.price + (self.tpPips / 10000)))
+        # self.Log("SL " + str(recNum) + " at " + str(self.price - (self.slPips / 10000)) + " | TP " + str(recNum) + " at " + str(self.price + (self.tpPips / 10000)))
         
         return
             
