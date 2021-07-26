@@ -15,11 +15,6 @@ class GreenMuleZoneRec(QCAlgorithm):
         self.orderQuantity = 1000
         self.slPips = 100
         self.tpPips = 50
-        
-        self.trades = {'rec0': '', 'slRec0': '', 'tpRec0': '',
-            'rec1': '', 'slRec1': '', 'tpRec1': '',
-            'rec2': '', 'slRec2': '', 'tpRec2': '',
-        }
 
         
     def OnData(self, data):
@@ -35,37 +30,43 @@ class GreenMuleZoneRec(QCAlgorithm):
             firstPosition = - self.orderQuantity
         
         if not self.Portfolio.Invested:
-            self.recTrade(0, firstPosition)
-            self.Log('trades: ' + str(self.trades))
-            
-        # cancel all orders if a TP is hit
-        
-        # can't use dict to store orders :(
-        # Runtime Error: AttributeError : 'str' object has no attribute 'Status' at OnData elif self.trades['tpRec0'].Status == OrderStatus.Filled
-        elif self.trades['tpRec0'].Status == OrderStatus.Filled or self.trades['tpRec1'].Status == OrderStatus.Filled or self.trades['tpRec2'].Status == OrderStatus.Filled:
-            self.Transactions.CancelOpenOrders(self.pair)
-        # open recovery trades
-        elif self.trades[slRec0].Status == OrderStatus.Filled:
-            self.trades[tpRec0].Cancel()
-            self.recTrade(1, (2 * (- firstPosition)))
-        elif self.trades[slRec1].Status == OrderStatus.Filled:
-            self.trades[tpRec1].Cancel()
-            self.recTrade(2, (4 * firstPosition))
-        elif self.trades[slRec2].Status == OrderStatus.Filled:
-            self.trades[tpRec2].Cancel()
-            self.recTrade(3, (8 * (- firstPosition)))
+            first = self.newTrade(1, firstPosition)
+            # self.Log('Opening first pos at market: ' + str(first.Symbol) + str(first.Price))
 
 
-    def recTrade(self, recNum, position):
+    
+    def OnOrderEvent(self, orderEvent):
+        order = self.Transactions.GetOrderById(orderEvent.OrderId)
         
-        self.trades[str("rec" + str(recNum))] = self.MarketOrder(self.pair, position)
-        self.trades[str("slRec" + str(recNum))] = self.StopMarketOrder(self.pair, -self.orderQuantity, (self.price - (self.slPips / 10000)))
-        self.trades[str("tpRec" + str(recNum))] = self.LimitOrder(self.pair, -self.orderQuantity, (self.price + (self.slPips / 10000)))
+        if order.Status == OrderStatus.Filled:
+            # if TP hit, cancel all orders
+            if order.Type == OrderType.Limit:
+                self.Transactions.CancelOpenOrders(order.Symbol)
+                
+            #if SL hit, open reverse recovery at market
+            elif order.Type == OrderType.StopMarket:
+                newTradeNum = (int(str(order.Tag).split('#', 1)[1:][0])) + 1
+                if order.Quantity > 0:
+                    newPosition = order.Quantity * 2
+                elif order.Quantity < 0:
+                    newPosition = - (order.Quantity * 2)
+                
+                self.newTrade(newTradeNum, newPosition)
+                
+                
+        if order.Status == OrderStatus.Canceled:
+            self.Log(str(orderEvent))
+    
+    
+    def newTrade(self, tradeNum, position):
+        tradeNum = str(tradeNum)
+
+        # new entry at market, update tag
+        trade = self.MarketOrder(self.pair, position)
+        updateSettings = UpdateOrderFields()
+        updateSettings.Tag = str('MKT#' + tradeNum)
+        trade.Update(updateSettings)
         
-        self.Log("rec" + str(recNum) + " at " + str(self.price) + " | " + 
-                "slRec" + str(recNum) + " at " + str(self.price - (self.slPips / 10000)) + " | " +
-                "tpRec" + str(recNum) + " at " + str(self.price + (self.tpPips / 10000)))
-        # self.Log("SL " + str(recNum) + " at " + str(self.price - (self.slPips / 10000)) + " | TP " + str(recNum) + " at " + str(self.price + (self.tpPips / 10000)))
-        
+        sl = self.StopMarketOrder(self.pair, - position, (self.price - (self.slPips / 10000)), (str('SL#' + tradeNum)))
+        tp = self.LimitOrder(self.pair, - position, (self.price + (self.slPips / 10000)), (str('TP#' + tradeNum)))
         return
-            
