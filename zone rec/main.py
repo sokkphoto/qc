@@ -4,7 +4,7 @@ class GreenMuleZoneRec(QCAlgorithm):
         
         self.SetCash(1000)
         self.SetStartDate(2020, 1, 1)
-        self.SetEndDate(2021, 1, 30)
+        self.SetEndDate(2021, 1, 1)
         self.pair = self.AddForex("AUDUSD", Resolution.Minute, Market.Oanda).Symbol
         self.SetBrokerageModel(BrokerageName.OandaBrokerage)
         
@@ -12,6 +12,7 @@ class GreenMuleZoneRec(QCAlgorithm):
         
         self.sma = self.SMA(self.pair, 200, Resolution.Hour)
         self.orderQuantity = 1000
+        self.maxQuantity = 16000
         self.slPips = 60
         self.tpPips = 30
         
@@ -53,9 +54,13 @@ class GreenMuleZoneRec(QCAlgorithm):
                 
                 self.tradeNum = self.tradeNum + 1
                 #newTradeNum = (int(str(order.Tag).split('#', 1)[1:][0])) + 1
-                newPosition = - (order.Quantity * 2)
-                self.Log('New recovery position: ' + str(newPosition))
-                self.newTrade(self.tradeNum, newPosition)
+                #same direction as SL ! (reverse to original market)
+                newPosition = order.Quantity * 2
+                if not abs(newPosition) > self.maxQuantity:
+                    self.Log('New recovery position: ' + str(newPosition))
+                    self.newTrade(self.tradeNum, newPosition)
+                else:
+                    self.Log('Recovery not opened, maxQuantity reached.')
                 
                 
         if order.Status == OrderStatus.Canceled:
@@ -69,7 +74,7 @@ class GreenMuleZoneRec(QCAlgorithm):
         trade = self.MarketOrder(self.pair, position)
         self.Log('New entry at market #' + tradeNum + ' | ' + str(position) + ' @ ' + str(self.price))
         
-        #update tag
+        #update tag, not working!
         response = trade.UpdateTag(str('MKT#' + tradeNum))
         
         if response.IsSuccess:
