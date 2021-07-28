@@ -1,37 +1,46 @@
-class GreenMuleZoneRec(QCAlgorithm):
+class BrownBadgerZoneRec(QCAlgorithm):
 
     def Initialize(self):
         
         self.SetCash(1000)
         self.SetStartDate(2020, 1, 1)
-        self.SetEndDate(2021, 1, 1)
-        self.pair = self.AddForex("AUDUSD", Resolution.Minute, Market.Oanda).Symbol
+        self.SetEndDate(2020, 3, 1)
+        self.pair = self.AddForex("EURUSD", Resolution.Minute, Market.Oanda).Symbol
         self.SetBrokerageModel(BrokerageName.OandaBrokerage)
-        
         self.lotSize = self.Securities[self.pair].SymbolProperties.LotSize
         
-        self.sma = self.SMA(self.pair, 200, Resolution.Hour)
+        self.smaSlow = self.SMA(self.pair, 200, Resolution.Hour)
+        self.smaFast = self.SMA(self.pair, 9, Resolution.Hour)
+        #self.atr = self.ATR(self.pair, 5)
+        
         self.orderQuantity = 1000
         self.maxQuantity = 16000
         self.slPips = 60
         self.tpPips = 30
+        self.atrFactorSL = 2
+        self.atrFactorTP = 1.5
         
-        self.Log('Quantity is ' + str(self.orderQuantity) + ' | SL pips: ' + str(self.slPips) + ' | TP pips: ' + str(self.tpPips))
+        self.Log('Order quantity is ' + str(self.orderQuantity))
         self.tradeNum = 0
         
     def OnData(self, data):
-        if not self.sma.IsReady or self.pair not in data:
+        if not self.smaSlow.IsReady or self.pair not in data:
             return
         
         self.price = data[self.pair].Close
         
         # get direction of first pos and open
-        if self.price > self.sma.Current.Value:
+        if self.smaFast.Current.Value > self.smaSlow.Current.Value and self.price < self.smaFast.Current.Value:
             firstPosition = self.orderQuantity
-        elif self.price < self.sma.Current.Value:
+        elif self.smaFast.Current.Value < self.smaSlow.Current.Value and self.price > self.smaFast.Current.Value:
             firstPosition = - self.orderQuantity
+        else:
+            return
         
         if not self.Portfolio.Invested:
+            self.Log('First entry conditions met. Slow SMA: ' + str(self.smaSlow.Current.Value) + 
+                ' | Fast SMA: ' + str(self.smaFast.Current.Value) + ' | Price: ' + str(self.price))
+            self.Log('SL pips: ' + str(self.slPips) + ' | TP pips: ' + str(self.tpPips))
             self.tradeNum = 1
             first = self.newTrade(self.tradeNum, firstPosition)
             
@@ -69,6 +78,9 @@ class GreenMuleZoneRec(QCAlgorithm):
     
     def newTrade(self, n, position):
         tradeNum = str(n)
+        
+        #self.slPips = (self.atr.Current.Value * self.atrFactorSL) * 10000
+        #self.tpPips = (self.atr.Current.Value * self.atrFactorTP) * 10000
 
         # new entry at market
         trade = self.MarketOrder(self.pair, position)
