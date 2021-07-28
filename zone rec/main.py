@@ -4,7 +4,7 @@ class GreenMuleZoneRec(QCAlgorithm):
         
         self.SetCash(1000)
         self.SetStartDate(2020, 1, 1)
-        self.SetEndDate(2020, 1, 30)
+        self.SetEndDate(2021, 1, 30)
         self.pair = self.AddForex("AUDUSD", Resolution.Minute, Market.Oanda).Symbol
         self.SetBrokerageModel(BrokerageName.OandaBrokerage)
         
@@ -16,7 +16,7 @@ class GreenMuleZoneRec(QCAlgorithm):
         self.tpPips = 30
         
         self.Log('Quantity is ' + str(self.orderQuantity) + ' | SL pips: ' + str(self.slPips) + ' | TP pips: ' + str(self.tpPips))
-
+        self.tradeNum = 0
         
     def OnData(self, data):
         if not self.sma.IsReady or self.pair not in data:
@@ -31,7 +31,8 @@ class GreenMuleZoneRec(QCAlgorithm):
             firstPosition = - self.orderQuantity
         
         if not self.Portfolio.Invested:
-            first = self.newTrade(1, firstPosition)
+            self.tradeNum = 1
+            first = self.newTrade(self.tradeNum, firstPosition)
             
 
     
@@ -41,27 +42,28 @@ class GreenMuleZoneRec(QCAlgorithm):
         if order.Status == OrderStatus.Filled:
             # if TP hit, cancel all orders
             if order.Type == OrderType.Limit:
-                self.Transactions.CancelOpenOrders(order.Symbol)
-                self.Log(str(order.Tag) + 'hit at' + str(self.price) + '. Cancelled open orders.')
+                self.Transactions.CancelOpenOrders()
+                self.Log(str(order.Type) + str(order.Tag) + 'hit at' + str(self.price))
+                self.tradeNum = 0
                 
             #if SL hit, open reverse recovery at market
             elif order.Type == OrderType.StopMarket:
-                self.Log(str(order.Tag) + 'hit at' + str(self.price) + '. Opening recovery.')
-                newTradeNum = (int(str(order.Tag).split('#', 1)[1:][0])) + 1
-                if order.Quantity > 0:
-                    newPosition = order.Quantity * 2
-                elif order.Quantity < 0:
-                    newPosition = - (order.Quantity * 2)
+                self.Transactions.CancelOpenOrders()
+                self.Log(str(order.Type) + str(order.Tag) + 'hit at' + str(self.price) + '. Opening recovery.')
                 
-                self.newTrade(newTradeNum, newPosition)
+                self.tradeNum = self.tradeNum + 1
+                #newTradeNum = (int(str(order.Tag).split('#', 1)[1:][0])) + 1
+                newPosition = - (order.Quantity * 2)
+                self.Log('New recovery position: ' + str(newPosition))
+                self.newTrade(self.tradeNum, newPosition)
                 
                 
         if order.Status == OrderStatus.Canceled:
             self.Log(str(orderEvent))
     
     
-    def newTrade(self, tradeNum, position):
-        tradeNum = str(tradeNum)
+    def newTrade(self, n, position):
+        tradeNum = str(n)
 
         # new entry at market
         trade = self.MarketOrder(self.pair, position)
@@ -79,8 +81,8 @@ class GreenMuleZoneRec(QCAlgorithm):
             tp = self.LimitOrder(self.pair, - position, (self.price + (self.slPips / 10000)), (str('TP#' + tradeNum)))
             
         elif position < 0:
-            sl = self.StopMarketOrder(self.pair, position, (self.price + (self.slPips / 10000)), (str('SL#' + tradeNum)))
-            tp = self.LimitOrder(self.pair, position, (self.price - (self.slPips / 10000)), (str('TP#' + tradeNum)))
+            sl = self.StopMarketOrder(self.pair, - position, (self.price + (self.slPips / 10000)), (str('SL#' + tradeNum)))
+            tp = self.LimitOrder(self.pair, - position, (self.price - (self.slPips / 10000)), (str('TP#' + tradeNum)))
         self.Log('SL#' + tradeNum + 'set at ' + ' | ' + 'TP#' + tradeNum + 'set at ')
         
         return
