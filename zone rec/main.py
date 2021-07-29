@@ -3,8 +3,8 @@ class BrownBadgerZoneRec(QCAlgorithm):
     def Initialize(self):
         
         self.SetCash(1000)
-        self.SetStartDate(2019, 1, 1)
-        self.SetEndDate(2020, 1, 1)
+        self.SetStartDate(2020, 1, 1)
+        self.SetEndDate(2021, 1, 1)
         self.pair = self.AddForex("EURUSD", Resolution.Minute, Market.Oanda).Symbol
         self.SetBrokerageModel(BrokerageName.OandaBrokerage)
         self.lotSize = self.Securities[self.pair].SymbolProperties.LotSize
@@ -15,11 +15,16 @@ class BrownBadgerZoneRec(QCAlgorithm):
         self.RegisterIndicator(self.pair, self.atr, Resolution.Hour)
         
         self.orderQuantity = 1000
-        self.maxQuantity = 8000
+        self.maxQuantity = 16000
         #self.slPips = 60
         #self.tpPips = 30
-        self.atrFactorSL = 2
-        self.atrFactorTP = 1.8
+        self.atrFactorSL = 6
+        self.atrFactorTP = 3
+        self.minEntryATR = 0.0020
+        self.slPipsMax = 200
+        self.slPipsMin = 0
+        self.tpPipsMax = 200
+        self.tpPipsMin = 0
         
         self.Log('Order quantity is ' + str(self.orderQuantity))
         self.tradeNum = 0
@@ -38,15 +43,20 @@ class BrownBadgerZoneRec(QCAlgorithm):
         else:
             return
         
-        if not self.Portfolio.Invested:
+        if not self.Portfolio.Invested and self.atr.Current.Value > self.minEntryATR:
             self.Log('First entry conditions met. Slow SMA: ' + str(self.smaSlow.Current.Value) + 
                 ' | Fast SMA: ' + str(self.smaFast.Current.Value) + ' | Price: ' + str(self.price))
             #self.Log('SL pips: ' + str(self.slPips) + ' | TP pips: ' + str(self.tpPips))
             self.tradeNum = 1
             
+            def limit(num, minimum, maximum):
+                return max(min(num, maximum), minimum)
+            
             #set SL & TP with ATR
             self.slPips = self.atr.Current.Value * self.atrFactorSL * 10000
+            self.slPips = limit(self.slPips, self.slPipsMin, self.slPipsMax)
             self.tpPips = self.atr.Current.Value * self.atrFactorTP * 10000
+            self.tpPips = limit(self.tpPips, self.tpPipsMin, self.tpPipsMax)
             self.Log('SL pips set to: ' + str(self.slPips) + ' | TP pips set to: ' + str(self.tpPips))
             
             first = self.newTrade(self.tradeNum, firstPosition)
