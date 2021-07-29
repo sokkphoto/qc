@@ -9,9 +9,10 @@
 + tradeNum/maxQuantity piiraja
 
 + better first entry - MA cross, price below fast MA
-- get ATR working for SL, TP
-- better recovery entry - price below fast MA
++ get ATR working for SL, TP
 
+
+- better recovery entry - price below fast MA
 - OnOrderEvent - logida fill price, mitte praegune market
 - parameetrid
 - populate indi values to start right after init

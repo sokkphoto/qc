@@ -3,22 +3,23 @@ class BrownBadgerZoneRec(QCAlgorithm):
     def Initialize(self):
         
         self.SetCash(1000)
-        self.SetStartDate(2020, 1, 1)
-        self.SetEndDate(2020, 3, 1)
+        self.SetStartDate(2019, 1, 1)
+        self.SetEndDate(2020, 1, 1)
         self.pair = self.AddForex("EURUSD", Resolution.Minute, Market.Oanda).Symbol
         self.SetBrokerageModel(BrokerageName.OandaBrokerage)
         self.lotSize = self.Securities[self.pair].SymbolProperties.LotSize
         
         self.smaSlow = self.SMA(self.pair, 200, Resolution.Hour)
         self.smaFast = self.SMA(self.pair, 9, Resolution.Hour)
-        #self.atr = self.ATR(self.pair, 5)
+        self.atr = self.ATR(self.pair, 5, MovingAverageType.Simple, Resolution.Hour)
+        self.RegisterIndicator(self.pair, self.atr, Resolution.Hour)
         
         self.orderQuantity = 1000
-        self.maxQuantity = 16000
-        self.slPips = 60
-        self.tpPips = 30
+        self.maxQuantity = 8000
+        #self.slPips = 60
+        #self.tpPips = 30
         self.atrFactorSL = 2
-        self.atrFactorTP = 1.5
+        self.atrFactorTP = 1.8
         
         self.Log('Order quantity is ' + str(self.orderQuantity))
         self.tradeNum = 0
@@ -40,8 +41,14 @@ class BrownBadgerZoneRec(QCAlgorithm):
         if not self.Portfolio.Invested:
             self.Log('First entry conditions met. Slow SMA: ' + str(self.smaSlow.Current.Value) + 
                 ' | Fast SMA: ' + str(self.smaFast.Current.Value) + ' | Price: ' + str(self.price))
-            self.Log('SL pips: ' + str(self.slPips) + ' | TP pips: ' + str(self.tpPips))
+            #self.Log('SL pips: ' + str(self.slPips) + ' | TP pips: ' + str(self.tpPips))
             self.tradeNum = 1
+            
+            #set SL & TP with ATR
+            self.slPips = self.atr.Current.Value * self.atrFactorSL * 10000
+            self.tpPips = self.atr.Current.Value * self.atrFactorTP * 10000
+            self.Log('SL pips set to: ' + str(self.slPips) + ' | TP pips set to: ' + str(self.tpPips))
+            
             first = self.newTrade(self.tradeNum, firstPosition)
             
 
@@ -53,13 +60,13 @@ class BrownBadgerZoneRec(QCAlgorithm):
             # if TP hit, cancel all orders
             if order.Type == OrderType.Limit:
                 self.Transactions.CancelOpenOrders()
-                self.Log(str(order.Type) + str(order.Tag) + 'hit at' + str(self.price))
+                self.Log(str(order.Type) + str(order.Tag) + ' hit at ' + str(self.price))
                 self.tradeNum = 0
                 
             #if SL hit, open reverse recovery at market
             elif order.Type == OrderType.StopMarket:
                 self.Transactions.CancelOpenOrders()
-                self.Log(str(order.Type) + str(order.Tag) + 'hit at' + str(self.price) + '. Opening recovery.')
+                self.Log(str(order.Type) + str(order.Tag) + ' hit at ' + str(self.price) + '. Opening recovery.')
                 
                 self.tradeNum = self.tradeNum + 1
                 #newTradeNum = (int(str(order.Tag).split('#', 1)[1:][0])) + 1
@@ -78,9 +85,6 @@ class BrownBadgerZoneRec(QCAlgorithm):
     
     def newTrade(self, n, position):
         tradeNum = str(n)
-        
-        #self.slPips = (self.atr.Current.Value * self.atrFactorSL) * 10000
-        #self.tpPips = (self.atr.Current.Value * self.atrFactorTP) * 10000
 
         # new entry at market
         trade = self.MarketOrder(self.pair, position)
@@ -88,7 +92,6 @@ class BrownBadgerZoneRec(QCAlgorithm):
         
         #update tag, not working!
         response = trade.UpdateTag(str('MKT#' + tradeNum))
-        
         if response.IsSuccess:
             self.Log('Tag set to ' + str('MKT#' + tradeNum))
         
@@ -100,6 +103,6 @@ class BrownBadgerZoneRec(QCAlgorithm):
         elif position < 0:
             sl = self.StopMarketOrder(self.pair, - position, (self.price + (self.slPips / 10000)), (str('SL#' + tradeNum)))
             tp = self.LimitOrder(self.pair, - position, (self.price - (self.slPips / 10000)), (str('TP#' + tradeNum)))
-        self.Log('SL#' + tradeNum + 'set at ' + ' | ' + 'TP#' + tradeNum + 'set at ')
+        self.Log('SL#' + tradeNum + ' set at ' + ' | ' + 'TP#' + tradeNum + ' set at ')
         
         return
