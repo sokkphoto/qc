@@ -9,22 +9,21 @@ class BrownBadgerZoneRec(QCAlgorithm):
         self.SetBrokerageModel(BrokerageName.OandaBrokerage)
         self.lotSize = self.Securities[self.pair].SymbolProperties.LotSize
         
-        self.smaSlow = self.SMA(self.pair, 200, Resolution.Hour)
-        self.smaFast = self.SMA(self.pair, 9, Resolution.Hour)
-        self.atr = self.ATR(self.pair, 5, MovingAverageType.Simple, Resolution.Hour)
+        self.smaSlow = self.SMA(self.pair, int(self.GetParameter("sma-slow")), Resolution.Hour)
+        self.smaFast = self.SMA(self.pair, int(self.GetParameter("sma-fast")), Resolution.Hour)
+        self.atr = self.ATR(self.pair, int(self.GetParameter("atr")), MovingAverageType.Simple, Resolution.Hour)
         self.RegisterIndicator(self.pair, self.atr, Resolution.Hour)
         
-        self.orderQuantity = 1000
-        self.maxQuantity = 16000
-        #self.slPips = 60
-        #self.tpPips = 30
-        self.atrFactorSL = 6
-        self.atrFactorTP = 3
-        self.minEntryATR = 0.0020
-        self.slPipsMax = 200
-        self.slPipsMin = 0
-        self.tpPipsMax = 200
-        self.tpPipsMin = 0
+        self.orderQuantity = int(self.GetParameter("order-quantity"))
+        self.orderInc = float(self.GetParameter("order-inc"))
+        self.maxQuantity = int(self.GetParameter("max-quantity"))
+        self.atrFactorSL = float(self.GetParameter("atr-factor-sl"))
+        self.atrFactorTP = float(self.GetParameter("atr-factor-tp"))
+        self.minEntryATR = float(self.GetParameter("min-entry-atr"))
+        self.slPipsMax = int(self.GetParameter("slpips-max"))
+        self.slPipsMin = int(self.GetParameter("slpips-min"))
+        self.tpPipsMax = int(self.GetParameter("tppips-max"))
+        self.tpPipsMin = int(self.GetParameter("tppips-min"))
         
         self.Log('Order quantity is ' + str(self.orderQuantity))
         self.tradeNum = 0
@@ -34,6 +33,16 @@ class BrownBadgerZoneRec(QCAlgorithm):
             return
         
         self.price = data[self.pair].Close
+        
+        def limit(num, minimum, maximum):
+            return max(min(num, maximum), minimum)
+            
+        #set SL & TP with ATR
+        self.slPips = self.atr.Current.Value * self.atrFactorSL * 10000
+        self.slPips = limit(self.slPips, self.slPipsMin, self.slPipsMax)
+        self.tpPips = self.atr.Current.Value * self.atrFactorTP * 10000
+        self.tpPips = limit(self.tpPips, self.tpPipsMin, self.tpPipsMax)
+        self.Log('SL pips set to: ' + str(self.slPips) + ' | TP pips set to: ' + str(self.tpPips))
         
         # get direction of first pos and open
         if self.smaFast.Current.Value > self.smaSlow.Current.Value and self.price < self.smaFast.Current.Value:
@@ -49,15 +58,6 @@ class BrownBadgerZoneRec(QCAlgorithm):
             #self.Log('SL pips: ' + str(self.slPips) + ' | TP pips: ' + str(self.tpPips))
             self.tradeNum = 1
             
-            def limit(num, minimum, maximum):
-                return max(min(num, maximum), minimum)
-            
-            #set SL & TP with ATR
-            self.slPips = self.atr.Current.Value * self.atrFactorSL * 10000
-            self.slPips = limit(self.slPips, self.slPipsMin, self.slPipsMax)
-            self.tpPips = self.atr.Current.Value * self.atrFactorTP * 10000
-            self.tpPips = limit(self.tpPips, self.tpPipsMin, self.tpPipsMax)
-            self.Log('SL pips set to: ' + str(self.slPips) + ' | TP pips set to: ' + str(self.tpPips))
             
             first = self.newTrade(self.tradeNum, firstPosition)
             
@@ -81,7 +81,7 @@ class BrownBadgerZoneRec(QCAlgorithm):
                 self.tradeNum = self.tradeNum + 1
                 #newTradeNum = (int(str(order.Tag).split('#', 1)[1:][0])) + 1
                 #same direction as SL ! (reverse to original market)
-                newPosition = order.Quantity * 2
+                newPosition = order.Quantity * self.orderInc
                 if not abs(newPosition) > self.maxQuantity:
                     self.Log('New recovery position: ' + str(newPosition))
                     self.newTrade(self.tradeNum, newPosition)
