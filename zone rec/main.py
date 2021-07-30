@@ -3,8 +3,8 @@ class BrownBadgerZoneRec(QCAlgorithm):
     def Initialize(self):
         
         self.SetCash(1000)
-        self.SetStartDate(2020, 1, 1)
-        self.SetEndDate(2021, 1, 1)
+        self.SetStartDate(2017, 1, 1)
+        self.SetEndDate(2018, 1, 1)
         self.pair = self.AddForex("EURUSD", Resolution.Minute, Market.Oanda).Symbol
         self.SetBrokerageModel(BrokerageName.OandaBrokerage)
         self.lotSize = self.Securities[self.pair].SymbolProperties.LotSize
@@ -79,11 +79,10 @@ class BrownBadgerZoneRec(QCAlgorithm):
                 self.Log(str(order.Type) + str(order.Tag) + ' hit at ' + str(self.price) + '. Opening recovery.')
                 
                 self.tradeNum = self.tradeNum + 1
-                #newTradeNum = (int(str(order.Tag).split('#', 1)[1:][0])) + 1
                 #same direction as SL ! (reverse to original market)
                 newPosition = order.Quantity * self.orderInc
                 if not abs(newPosition) > self.maxQuantity:
-                    self.Log('New recovery position: ' + str(newPosition))
+                    #self.Log('New recovery position: ' + str(newPosition))
                     self.newTrade(self.tradeNum, newPosition)
                 else:
                     self.Log('Recovery not opened, maxQuantity reached.')
@@ -108,11 +107,11 @@ class BrownBadgerZoneRec(QCAlgorithm):
         # set SL and TP
         if position > 0:
             sl = self.StopMarketOrder(self.pair, - position, (self.price - (self.slPips / 10000)), (str('SL#' + tradeNum)))
-            tp = self.LimitOrder(self.pair, - position, (self.price + (self.slPips / 10000)), (str('TP#' + tradeNum)))
+            tp = self.LimitOrder(self.pair, - position, (self.price + (self.tpPips / 10000)), (str('TP#' + tradeNum)))
             
         elif position < 0:
             sl = self.StopMarketOrder(self.pair, - position, (self.price + (self.slPips / 10000)), (str('SL#' + tradeNum)))
-            tp = self.LimitOrder(self.pair, - position, (self.price - (self.slPips / 10000)), (str('TP#' + tradeNum)))
+            tp = self.LimitOrder(self.pair, - position, (self.price - (self.tpPips / 10000)), (str('TP#' + tradeNum)))
         self.Log('SL#' + tradeNum + ' set at ' + ' | ' + 'TP#' + tradeNum + ' set at ')
         
         return
