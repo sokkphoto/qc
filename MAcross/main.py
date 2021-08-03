@@ -62,10 +62,10 @@ class MuscularApricotSalmon(QCAlgorithm):
             if self.tradeNum == 0: 
                 self.tradeNum = 1
             self.Log('Opening trade #' + str(self.tradeNum))
-            trade = self.newTrade(self.tradeNum, self.position)
+            self.trade = self.newTrade(self.tradeNum, self.position)
             
         # if already in trade, trail stop
-        # else: self.trailStop(self.sl)
+        else: self.trailStop(self.sl, self.position)
 
 
     def OnOrderEvent(self, orderEvent):
@@ -95,29 +95,36 @@ class MuscularApricotSalmon(QCAlgorithm):
             
         # set SL and TP
         if position > 0:
-            sl = self.StopMarketOrder(self.pair, - position, (self.price - (self.slPips / 10000)), (str('SL#' + tradeNum)))
+            self.sl = self.StopMarketOrder(self.pair, - position, (self.price - (self.slPips / 10000)), (str('SL#' + tradeNum)))
             tp = self.LimitOrder(self.pair, - position, (self.price + (self.tpPips / 10000)), (str('TP#' + tradeNum)))
             
         elif position < 0:
-            sl = self.StopMarketOrder(self.pair, - position, (self.price + (self.slPips / 10000)), (str('SL#' + tradeNum)))
+            self.sl = self.StopMarketOrder(self.pair, - position, (self.price + (self.slPips / 10000)), (str('SL#' + tradeNum)))
             tp = self.LimitOrder(self.pair, - position, (self.price - (self.tpPips / 10000)), (str('TP#' + tradeNum)))
-        self.Log('SL#' + tradeNum + ' set at ' + ' | ' + 'TP#' + tradeNum + ' set at ')
+        self.Log('SL#' + tradeNum + ' set at ' + str(self.sl.Get(OrderField.StopPrice)) + ' | ' + 'TP#' + tradeNum + ' set at ' + str(tp.Get(OrderField.LimitPrice)))
         
+    
+    # stop trade ticket and original trade position as input    
+    def trailStop(self, stoptrade, position):
         
-    def trailStop(self, trade, position):
+        slPrice = stoptrade.Get(OrderField.StopPrice)
+        self.Debug('SL currently ' + str(slPrice))
+        
+        if slPrice < self.price:
+            slOrderDirection = -1
+        elif slPrice > self.price:
+            slOrderDirection = 1
         
         updateSettingsSl = UpdateOrderFields()
-        slPos = self.sl.Get(OrderField.StopPrice)
-        self.Debug('SL pos size is ' + str(slPos))
-        
-        if slPos > 0:
-            #if self.price < 
+        # trade is long, SL short
+        if self.price > slPrice + (self.slPips / 10000) and position > 0:
             updateSettingsSl.StopPrice = self.price - (self.slPips / 10000)
-        elif slPos < 0:
+        # trade is short, SL long
+        elif self.price < slPrice - (self.slPips / 10000) and position < 0:
             updateSettingsSl.StopPrice = self.price + (self.slPips / 10000)
         responseSl = self.sl.Update(updateSettingsSl)
 
         if responseSl.IsSuccess:
-             self.Debug("SL updated to " + str(updateSettingsSl.StopPrice))
-
-    
+             self.Debug('SL updated to ' + str(updateSettingsSl.StopPrice))
+             
+        
