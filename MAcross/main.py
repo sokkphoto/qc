@@ -1,3 +1,4 @@
+# 3MA cross
 class MuscularApricotSalmon(QCAlgorithm):
 
     def Initialize(self):
@@ -24,6 +25,7 @@ class MuscularApricotSalmon(QCAlgorithm):
         self.tpPipsMin = int(self.GetParameter("tppips-min"))
         
         self.Log('Order quantity is ' + str(self.orderQuantity))
+        self.tradeNum = 0
 
     def OnData(self, data):
         if not self.smaSlow.IsReady or self.pair not in data:
@@ -57,12 +59,13 @@ class MuscularApricotSalmon(QCAlgorithm):
             self.Log('First entry conditions met. Slow SMA: ' + str(self.smaSlow.Current.Value) + 
                 ' | Fast SMA: ' + str(self.smaFast.Current.Value) + ' | Mid SMA: ' + str(self.smaMid.Current.Value) + ' | Price: ' + str(self.price))
             
-            if self.tradeNum == 0: self.tradeNum = 1
-            first = self.newTrade(self.tradeNum, self.position)
+            if self.tradeNum == 0: 
+                self.tradeNum = 1
+            self.Log('Opening trade #' + str(self.tradeNum))
+            trade = self.newTrade(self.tradeNum, self.position)
             
         # if already in trade, trail stop
-        else:
-            self.trailStop(self.sl)
+        # else: self.trailStop(self.sl)
 
 
     def OnOrderEvent(self, orderEvent):
@@ -79,14 +82,14 @@ class MuscularApricotSalmon(QCAlgorithm):
             elif order.Type == OrderType.StopMarket:
                 self.Transactions.CancelOpenOrders()
                 self.Log(str(order.Tag) + ' hit at ' + str(self.price))
-                
                 self.tradeNum = self.tradeNum + 1
                 
         if order.Status == OrderStatus.Canceled:
             self.Log(str(orderEvent))
                 
                 
-    def newTrade(self, n, position):
+    def newTrade(self, tradeNum, position):
+        tradeNum = str(tradeNum)
         self.trade = self.MarketOrder(self.pair, position)
         self.Log('New entry at market: ' + str(self.trade.Quantity) + ' @ ' + str(self.price))
             
@@ -108,7 +111,7 @@ class MuscularApricotSalmon(QCAlgorithm):
         self.Debug('SL pos size is ' + str(slPos))
         
         if slPos > 0:
-            if self.price < 
+            #if self.price < 
             updateSettingsSl.StopPrice = self.price - (self.slPips / 10000)
         elif slPos < 0:
             updateSettingsSl.StopPrice = self.price + (self.slPips / 10000)
