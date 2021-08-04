@@ -3,15 +3,15 @@ class MuscularApricotSalmon(QCAlgorithm):
 
     def Initialize(self):
         self.SetCash(1000)
-        self.SetStartDate(2020, 1, 1)
-        self.SetEndDate(2020, 3, 1)
+        self.SetStartDate(2020, 7, 1)
+        self.SetEndDate(2020, 10, 1)
         self.pair = self.AddForex("EURUSD", Resolution.Minute, Market.Oanda).Symbol
         self.SetBrokerageModel(BrokerageName.OandaBrokerage)
         self.lotSize = self.Securities[self.pair].SymbolProperties.LotSize
         
-        self.smaSlow = self.SMA(self.pair, int(self.GetParameter("sma-slow")), Resolution.Hour)
-        self.smaMid = self.SMA(self.pair, int(self.GetParameter("sma-mid")), Resolution.Hour)
-        self.smaFast = self.SMA(self.pair, int(self.GetParameter("sma-fast")), Resolution.Hour)
+        self.emaSlow = self.EMA(self.pair, int(self.GetParameter("ema-slow")), Resolution.Hour)
+        self.emaMid = self.EMA(self.pair, int(self.GetParameter("ema-mid")), Resolution.Hour)
+        self.emaFast = self.EMA(self.pair, int(self.GetParameter("ema-fast")), Resolution.Hour)
         
         self.atr = self.ATR(self.pair, int(self.GetParameter("atr")), MovingAverageType.Simple, Resolution.Hour)
         self.RegisterIndicator(self.pair, self.atr, Resolution.Hour)
@@ -28,19 +28,22 @@ class MuscularApricotSalmon(QCAlgorithm):
         self.tradeNum = 0
 
     def OnData(self, data):
-        if not self.smaSlow.IsReady or self.pair not in data:
+        if not self.emaSlow.IsReady or self.pair not in data:
             return
         
         self.price = data[self.pair].Close
+        self.checkValidCross(self.emaFast.Current.Value, self.emaMid.Current.Value, self.emaSlow.Current.Value, self.atr.Current.Value)
         
         # check conditions
-        if (self.smaMid.Current.Value > self.smaSlow.Current.Value and 
-                self.smaFast.Current.Value > self.smaMid.Current.Value and 
-                self.price < self.smaFast.Current.Value):
+        if (self.emaMid.Current.Value > self.emaSlow.Current.Value and 
+                self.emaFast.Current.Value > self.emaMid.Current.Value and 
+                self.price < self.emaFast.Current.Value and
+                self.validCross == 1):
             self.position = self.orderQuantity
-        elif (self.smaMid.Current.Value < self.smaSlow.Current.Value and 
-                self.smaFast.Current.Value < self.smaMid.Current.Value and 
-                self.price > self.smaFast.Current.Value):
+        elif (self.emaMid.Current.Value < self.emaSlow.Current.Value and 
+                self.emaFast.Current.Value < self.emaMid.Current.Value and 
+                self.price > self.emaFast.Current.Value and
+                self.validCross == -1):
             self.position = - self.orderQuantity
         else: 
             return
@@ -56,8 +59,8 @@ class MuscularApricotSalmon(QCAlgorithm):
         
         # enter if conditions met & already not in trade
         if not self.Portfolio.Invested:
-            self.Log('First entry conditions met. Slow SMA: ' + str(self.smaSlow.Current.Value) + 
-                ' | Fast SMA: ' + str(self.smaFast.Current.Value) + ' | Mid SMA: ' + str(self.smaMid.Current.Value) + ' | Price: ' + str(self.price))
+            self.Log('First entry conditions met. Slow SMA: ' + str(self.emaSlow.Current.Value) + 
+                ' | Fast SMA: ' + str(self.emaFast.Current.Value) + ' | Mid SMA: ' + str(self.emaMid.Current.Value) + ' | Price: ' + str(self.price))
             
             if self.tradeNum == 0: 
                 self.tradeNum = 1
@@ -65,7 +68,9 @@ class MuscularApricotSalmon(QCAlgorithm):
             self.trade = self.newTrade(self.tradeNum, self.position)
             
         # if already in trade, trail stop
-        else: self.trailStop(self.sl, self.position)
+        else: 
+            self.trailStop(self.sl, self.position)
+            self.reverseCrossExit(self.position)
 
 
     def OnOrderEvent(self, orderEvent):
@@ -95,12 +100,12 @@ class MuscularApricotSalmon(QCAlgorithm):
             
         # set SL and TP
         if position > 0:
-            self.sl = self.StopMarketOrder(self.pair, - position, (self.price - (self.slPips / 10000)), (str('SL#' + tradeNum)))
-            tp = self.LimitOrder(self.pair, - position, (self.price + (self.tpPips / 10000)), (str('TP#' + tradeNum)))
+            self.sl = self.StopMarketOrder(self.pair, - position, round((self.price - (self.slPips / 10000)), 5), (str('SL#' + tradeNum)))
+            tp = self.LimitOrder(self.pair, - position, round((self.price + (self.tpPips / 10000)), 5), (str('TP#' + tradeNum)))
             
         elif position < 0:
-            self.sl = self.StopMarketOrder(self.pair, - position, (self.price + (self.slPips / 10000)), (str('SL#' + tradeNum)))
-            tp = self.LimitOrder(self.pair, - position, (self.price - (self.tpPips / 10000)), (str('TP#' + tradeNum)))
+            self.sl = self.StopMarketOrder(self.pair, - position, round((self.price + (self.slPips / 10000)), 5), (str('SL#' + tradeNum)))
+            tp = self.LimitOrder(self.pair, - position, round((self.price - (self.tpPips / 10000)), 5), (str('TP#' + tradeNum)))
         self.Log('SL#' + tradeNum + ' set at ' + str(self.sl.Get(OrderField.StopPrice)) + ' | ' + 'TP#' + tradeNum + ' set at ' + str(tp.Get(OrderField.LimitPrice)))
         
     
@@ -108,7 +113,6 @@ class MuscularApricotSalmon(QCAlgorithm):
     def trailStop(self, stoptrade, position):
         
         slPrice = stoptrade.Get(OrderField.StopPrice)
-        self.Debug('SL currently ' + str(slPrice))
         
         if slPrice < self.price:
             slOrderDirection = -1
@@ -118,13 +122,43 @@ class MuscularApricotSalmon(QCAlgorithm):
         updateSettingsSl = UpdateOrderFields()
         # trade is long, SL short
         if self.price > slPrice + (self.slPips / 10000) and position > 0:
-            updateSettingsSl.StopPrice = self.price - (self.slPips / 10000)
+            updateSettingsSl.StopPrice = round(self.price - (self.slPips / 10000), 5)
         # trade is short, SL long
         elif self.price < slPrice - (self.slPips / 10000) and position < 0:
-            updateSettingsSl.StopPrice = self.price + (self.slPips / 10000)
+            updateSettingsSl.StopPrice = round(self.price + (self.slPips / 10000), 5)
         responseSl = self.sl.Update(updateSettingsSl)
 
         if responseSl.IsSuccess:
              self.Debug('SL updated to ' + str(updateSettingsSl.StopPrice))
-             
-        
+        return
+    
+    # exit & cancel all orders if crossed in opposite direction & price > emaFast 
+    def reverseCrossExit(self, position):
+        if (position > 0 and
+                self.emaFast.Current.Value < self.emaMid.Current.Value and
+                self.emaMid.Current.Value < self.emaSlow.Current.Value and
+                self.price > self.emaFast.Current.Value):
+            self.Liquidate()
+        elif (position < 0 and
+                self.emaFast.Current.Value > self.emaMid.Current.Value and
+                self.emaMid.Current.Value > self.emaSlow.Current.Value and
+                self.price < self.emaFast.Current.Value):
+            self.Liquidate()
+        return
+    
+    
+    # check if the MAs have been in a proximity of x ATRs, and crossed
+    # this is to avoid entry too late (when MAs are already apart), before reversion
+    def checkValidCross(self, fast, mid, slow, atr):
+        if (fast > mid and 
+                mid > slow and 
+                abs(slow - fast) < (atr * 0.5)):
+            self.validCross = 1
+            self.Log('Crossed up')
+        elif (fast < mid and 
+                mid < slow and 
+                abs(slow - fast) < (atr * 0.5)):
+            self.validCross = -1
+            self.Log('Crossed down')
+        else:
+            self.validCross = 0
