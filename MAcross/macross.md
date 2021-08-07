@@ -18,6 +18,8 @@ only enter after cross or if emaFast & emaMid difference < 0.5 ATR
 + entry if ADX > 25 only
 - remove reverse MA coss, not functional
 
++ trailstop moves SL higher, fix!
+
 - add 4th EMA
 
 - walk forward testing w cli

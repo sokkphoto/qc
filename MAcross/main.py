@@ -75,7 +75,7 @@ class MuscularApricotSalmon(QCAlgorithm):
         # if already in trade, trail stop
         else: 
             self.trailStop(self.sl, self.position)
-            #self.reverseCrossExit(self.position)
+            self.reverseCrossExit(self.position)
 
 
     def OnOrderEvent(self, orderEvent):
@@ -119,36 +119,33 @@ class MuscularApricotSalmon(QCAlgorithm):
         
         slPrice = stoptrade.Get(OrderField.StopPrice)
         
-        if slPrice < self.price:
-            slOrderDirection = -1
-        elif slPrice > self.price:
-            slOrderDirection = 1
-        
         updateSettingsSl = UpdateOrderFields()
         # trade is long, SL short
         if self.price > slPrice + (self.slPips / 10000) and position > 0:
             updateSettingsSl.StopPrice = round(self.price - (self.slPips / 10000), 5)
+            self.Log('SL updated to ' + str(updateSettingsSl.StopPrice))
+            
         # trade is short, SL long
         elif self.price < slPrice - (self.slPips / 10000) and position < 0:
             updateSettingsSl.StopPrice = round(self.price + (self.slPips / 10000), 5)
+            self.Log('SL updated to ' + str(updateSettingsSl.StopPrice))
+            
         responseSl = self.sl.Update(updateSettingsSl)
 
-        if responseSl.IsSuccess:
-             self.Log('SL updated to ' + str(updateSettingsSl.StopPrice))
-        return
+    
     
     # exit & cancel all orders if crossed in opposite direction & price > emaFast 
     # doesnt do anything :/
     def reverseCrossExit(self, position):
         if (position > 0 and
                 self.emaFast.Current.Value < self.emaMid.Current.Value and
-                self.emaMid.Current.Value < self.emaSlow.Current.Value and
-                self.price > self.emaFast.Current.Value):
+                self.emaMid.Current.Value < self.emaSlow.Current.Value):
+            self.Log('Reverse cross detected')
             self.Liquidate()
         elif (position < 0 and
                 self.emaFast.Current.Value > self.emaMid.Current.Value and
-                self.emaMid.Current.Value > self.emaSlow.Current.Value and
-                self.price < self.emaFast.Current.Value):
+                self.emaMid.Current.Value > self.emaSlow.Current.Value):
+            self.Log('Reverse cross detected')
             self.Liquidate()
         return
     
