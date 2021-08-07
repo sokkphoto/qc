@@ -3,8 +3,8 @@ class MuscularApricotSalmon(QCAlgorithm):
 
     def Initialize(self):
         self.SetCash(1000)
-        self.SetStartDate(2020, 7, 1)
-        self.SetEndDate(2020, 10, 1)
+        self.SetStartDate(2020, 6, 1)
+        self.SetEndDate(2021, 1, 1)
         self.pair = self.AddForex("EURUSD", Resolution.Minute, Market.Oanda).Symbol
         self.SetBrokerageModel(BrokerageName.OandaBrokerage)
         self.lotSize = self.Securities[self.pair].SymbolProperties.LotSize
@@ -12,6 +12,7 @@ class MuscularApricotSalmon(QCAlgorithm):
         self.emaSlow = self.EMA(self.pair, int(self.GetParameter("ema-slow")), Resolution.Hour)
         self.emaMid = self.EMA(self.pair, int(self.GetParameter("ema-mid")), Resolution.Hour)
         self.emaFast = self.EMA(self.pair, int(self.GetParameter("ema-fast")), Resolution.Hour)
+        self.adx = self.ADX(self.pair, int(self.GetParameter("ema-mid")), Resolution.Hour)
         
         self.atr = self.ATR(self.pair, int(self.GetParameter("atr")), MovingAverageType.Simple, Resolution.Hour)
         self.RegisterIndicator(self.pair, self.atr, Resolution.Hour)
@@ -26,6 +27,7 @@ class MuscularApricotSalmon(QCAlgorithm):
         
         self.Log('Order quantity is ' + str(self.orderQuantity))
         self.tradeNum = 0
+        self.validCross = 0
 
     def OnData(self, data):
         if not self.emaSlow.IsReady or self.pair not in data:
@@ -38,12 +40,14 @@ class MuscularApricotSalmon(QCAlgorithm):
         if (self.emaMid.Current.Value > self.emaSlow.Current.Value and 
                 self.emaFast.Current.Value > self.emaMid.Current.Value and 
                 self.price < self.emaFast.Current.Value and
-                self.validCross == 1):
+                self.validCross == 1 and
+                self.adx.Current.Value > 25):
             self.position = self.orderQuantity
         elif (self.emaMid.Current.Value < self.emaSlow.Current.Value and 
                 self.emaFast.Current.Value < self.emaMid.Current.Value and 
                 self.price > self.emaFast.Current.Value and
-                self.validCross == -1):
+                self.validCross == -1 and
+                self.adx.Current.Value > 25):
             self.position = - self.orderQuantity
         else: 
             return
@@ -61,6 +65,7 @@ class MuscularApricotSalmon(QCAlgorithm):
         if not self.Portfolio.Invested:
             self.Log('First entry conditions met. Slow SMA: ' + str(self.emaSlow.Current.Value) + 
                 ' | Fast SMA: ' + str(self.emaFast.Current.Value) + ' | Mid SMA: ' + str(self.emaMid.Current.Value) + ' | Price: ' + str(self.price))
+            self.Log('ADX: ' + str(self.adx.Current.Value))
             
             if self.tradeNum == 0: 
                 self.tradeNum = 1
@@ -70,7 +75,7 @@ class MuscularApricotSalmon(QCAlgorithm):
         # if already in trade, trail stop
         else: 
             self.trailStop(self.sl, self.position)
-            self.reverseCrossExit(self.position)
+            #self.reverseCrossExit(self.position)
 
 
     def OnOrderEvent(self, orderEvent):
@@ -129,10 +134,11 @@ class MuscularApricotSalmon(QCAlgorithm):
         responseSl = self.sl.Update(updateSettingsSl)
 
         if responseSl.IsSuccess:
-             self.Debug('SL updated to ' + str(updateSettingsSl.StopPrice))
+             self.Log('SL updated to ' + str(updateSettingsSl.StopPrice))
         return
     
     # exit & cancel all orders if crossed in opposite direction & price > emaFast 
+    # doesnt do anything :/
     def reverseCrossExit(self, position):
         if (position > 0 and
                 self.emaFast.Current.Value < self.emaMid.Current.Value and
@@ -152,13 +158,17 @@ class MuscularApricotSalmon(QCAlgorithm):
     def checkValidCross(self, fast, mid, slow, atr):
         if (fast > mid and 
                 mid > slow and 
-                abs(slow - fast) < (atr * 0.5)):
-            self.validCross = 1
-            self.Log('Crossed up')
+                abs(fast - mid) < (atr * 0.5)):
+            if self.validCross != 1:
+                self.validCross = 1
+                self.Log('Crossed up')
         elif (fast < mid and 
-                mid < slow and 
-                abs(slow - fast) < (atr * 0.5)):
-            self.validCross = -1
-            self.Log('Crossed down')
+            mid < slow and 
+            abs(fast - mid) < (atr * 0.5)):
+            if self.validCross != -1:
+                self.validCross = -1
+                self.Log('Crossed down')
         else:
             self.validCross = 0
+        return self.validCross
+        
