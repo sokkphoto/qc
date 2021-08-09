@@ -16,9 +16,10 @@ only enter after cross or if emaFast & emaMid difference < 0.5 ATR
 + reverse MA cross - exit & cancel all orders if crossed in opposite direction & price > emaFast (if long)
 
 + entry if ADX > 25 only
-- remove reverse MA coss, not functional
 
 + trailstop moves SL higher, fix!
+
+- entry condition check - should be fast > slow & fast & mid (to enter earlier)
 
 - add 4th EMA
 
