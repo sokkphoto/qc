@@ -19,10 +19,10 @@ only enter after cross or if emaFast & emaMid difference < 0.5 ATR
 
 + trailstop moves SL higher, fix!
 
-- entry condition check - should be fast > slow & fast & mid (to enter earlier)
++ entry condition check - should be fast > slow & fast & mid (to enter earlier)
 
-- add 4th EMA
+- walk forward testing w cli:
+emaFast, emaFactor, TP, SL, exitOnReverseCross, trailstop
 
-- walk forward testing w cli
-
-- order increase if stopped out WITHOUT profit (not if trail stop hit with profit)
++ order increase if stopped out WITHOUT profit (not if trail stop hit with profit)
+no good if used w trailstop
