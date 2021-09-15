@@ -1,10 +1,8 @@
-from datetime import timedelta
-
 class MAMultiPair(QCAlgorithm):
 
     def Initialize(self):
         self.SetStartDate(2020, 1, 1)
-        self.SetEndDate(2020, 6, 1)
+        self.SetEndDate(2020, 4, 1)
         self.SetCash(10000)
         
         emaFactor = float(self.GetParameter("ema-speed-factor"))
@@ -15,15 +13,16 @@ class MAMultiPair(QCAlgorithm):
 
         for ticker in ["NZDUSD","EURUSD"]:
            symbol = self.AddForex(ticker , Resolution.Hour).Symbol
+           self.Log('Initializing data for ' + str(symbol))
            self.Data[symbol] = SymbolData(
                 self.EMA(symbol, int(self.GetParameter("ema-fast")), Resolution.Hour),
                 self.EMA(symbol, emaSpeedMid, Resolution.Hour),
                 self.EMA(symbol, emaSpeedSlow, Resolution.Hour),
                 self.ATR(symbol, int(self.GetParameter("atr")), MovingAverageType.Simple, Resolution.Hour),
                 self.ADX(symbol, int(self.GetParameter("adx-period")), Resolution.Hour))
+            
         
         self.Log('** EMAs ** Fast: ' + str(self.GetParameter("ema-fast")) + ' Mid: ' + str(emaSpeedMid) + ' Slow: ' + str(emaSpeedSlow))
-        self.tradeNum = 0
 
         self.orderQuantity = int(self.GetParameter("order-quantity"))
         self.atrFactorSL = float(self.GetParameter("atr-factor-sl"))
@@ -49,35 +48,33 @@ class MAMultiPair(QCAlgorithm):
             atr = symbolData.atr.Current.Value
             adx = symbolData.adx.Current.Value
             price = data[symbol].Close
-            validCross = self.checkValidCross(fast, mid, slow, atr)
+            # validCross = self.checkValidCross(fast, mid, slow, atr)
             
             # check entry conditions
             if (price < fast and
-                    validCross == 1 and
+                    fast > mid and fast > slow and 
+                    # validCross == 1 and
                     adx > self.adxMin):
-                self.position = self.orderQuantity
+                position = self.orderQuantity
             elif (price > fast and
-                    validCross == -1 and
+                    fast < mid and fast < slow and
+                    # validCross == -1 and
                     adx > self.adxMin):
-                self.position = - self.orderQuantity
+                position = - self.orderQuantity
             else: 
                 return
             
-            if not self.Portfolio.Invested:
-                self.Log('First entry conditions met. Slow SMA: ' + str(slow) + 
-                    ' | Fast SMA: ' + str(fast) + ' | Mid SMA: ' + str(mid) + ' | Price: ' + str(price))
+            if not self.Portfolio[symbol].Invested:
+                self.Log(str(symbol) + ' Entry conditions met. Slow SMA: ' + str(round(slow, 5)) + ' | Mid SMA: ' + str(round(mid, 5)) +
+                    ' | Fast SMA: ' + str(round(fast, 5)) +' | Price: ' + str(round(price, 5)))
                 self.Log('ADX: ' + str(adx))
                 
-                # store cross direction & tradenum
-                self.crossAtEntry = validCross
-                if self.tradeNum == 0: 
-                    self.tradeNum = 1
-                self.Log('Opening trade #' + str(self.tradeNum))
+                # store cross direction
+                #crossAtEntry = validCross
                 
-                position = round(self.orderQuantity)
-                self.Log('Position: ' + str(self.position))
+                self.Log('Position: ' + str(position))
                 
-                self.trade = self.newTrade(self.tradeNum, position, symbol, price)
+                trade = self.newTrade(position, symbol, price)
             
                 
                 
@@ -100,10 +97,9 @@ class MAMultiPair(QCAlgorithm):
         return self.validCross
         
         
-    def newTrade(self, tradeNum, position, symbol, price):
-        tradeNum = str(tradeNum)
+    def newTrade(self, position, symbol, price):
         trade = self.MarketOrder(symbol, position)
-        self.Log('New entry at market: ' + str(trade.Quantity) + ' @ ' + str(price))
+        self.Log('New entry at market: ' + str(symbol) + ' ' + str(position) + ' @ ' + str(price))
         
         # TO DO - set based on ATR    
         """
@@ -126,14 +122,37 @@ class MAMultiPair(QCAlgorithm):
         tpDistance = 0.0100
         
         if position > 0:
-            sl = self.StopMarketOrder(symbol, - position, round((price - slDistance), 5), (str('SL#' + tradeNum)))
-            tp = self.LimitOrder(symbol, - position, round((price + tpDistance), 5), (str('TP#' + tradeNum)))
+            sl = self.StopMarketOrder(symbol, - position, round((price - slDistance), 5))
+            tp = self.LimitOrder(symbol, - position, round((price + tpDistance), 5))
             
         elif position < 0:
-            sl = self.StopMarketOrder(symbol, - position, round((price + (slDistance / 10000)), 5), (str('SL#' + tradeNum)))
-            tp = self.LimitOrder(symbol, - position, round((price - (tpDistance / 10000)), 5), (str('TP#' + tradeNum)))
-        self.Log('SL#' + tradeNum + ' set at ' + str(sl.Get(OrderField.StopPrice)) + ' | ' + 'TP#' + tradeNum + ' set at ' + str(tp.Get(OrderField.LimitPrice)))
+            sl = self.StopMarketOrder(symbol, - position, round((price + slDistance), 5))
+            tp = self.LimitOrder(symbol, - position, round((price - tpDistance), 5))
+        self.Log('SL set at ' + str(sl.Get(OrderField.StopPrice)) + ' | ' + 'TP set at ' + str(tp.Get(OrderField.LimitPrice)))
         return
+    
+    
+    
+    def OnOrderEvent(self, orderEvent):
+        order = self.Transactions.GetOrderById(orderEvent.OrderId)
+        
+        if order.Status == OrderStatus.Filled:
+            # if TP hit, cancel all orders
+            if order.Type == OrderType.Limit:
+                self.Log(str(order.Symbol) + ' TP hit at ' + str(orderEvent.FillPrice))
+                self.Transactions.CancelOpenOrders(order.Symbol)
+                
+                # self.tradeNum = 0
+                
+            #if SL hit, open reverse recovery at market
+            elif order.Type == OrderType.StopMarket:
+                self.Log(str(order.Symbol) + ' SL hit at ' + str(orderEvent.FillPrice))
+                self.Transactions.CancelOpenOrders(order.Symbol)
+                
+                
+                
+        if order.Status == OrderStatus.Canceled:
+            self.Log(str(orderEvent))
                 
     
 

@@ -1,8 +1,7 @@
 ## To Do
 
-- bug - trades only first pair in array
-
-- bug - opening long positions only
++ bug - trades only first pair in array
++ bug - opening long positions only
 
 - store tradeNum
 
