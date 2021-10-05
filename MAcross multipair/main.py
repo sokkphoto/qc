@@ -1,3 +1,5 @@
+from AlgorithmImports import *
+
 class MAMultiPair(QCAlgorithm):
 
     def Initialize(self):
@@ -12,7 +14,7 @@ class MAMultiPair(QCAlgorithm):
         self.Data = {}
 
         for ticker in ["NZDUSD","EURUSD"]:
-           symbol = self.AddForex(ticker , Resolution.Hour).Symbol
+           symbol = self.AddForex(ticker , Resolution.Minute).Symbol
            self.Log('Initializing data for ' + str(symbol))
            self.Data[symbol] = SymbolData(
                 self.EMA(symbol, int(self.GetParameter("ema-fast")), Resolution.Hour),
