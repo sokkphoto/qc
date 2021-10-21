@@ -7,4 +7,9 @@
 
 # To do
 
-- 2021-01-14 EURUSD - 6x sell market opened?
++ store list of openEntries with each short & long
+
+--- v2 ---
+
+- liquidate if maxOpenTrades reached
+- if trend reverses, open new grid
