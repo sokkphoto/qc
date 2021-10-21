@@ -9,7 +9,9 @@
 
 + store list of openEntries with each short & long
 
---- v2 ---
++ added max-open
 
-- liquidate if maxOpenTrades reached
-- if trend reverses, open new grid
+- try: liquidate if maxOpenTrades reached
+if trend reverses, open new grid
+
+- try: liquidate if in profit by n pips

@@ -7,16 +7,23 @@ class TrendGrid(QCAlgorithm):
         
         self.orderQuantity = int(self.GetParameter("order-quantity"))
         self.gridSpace = float(self.GetParameter("grid-space"))
+        self.maxOpen = int(self.GetParameter("max-open"))
+        self.emaFast = int(self.GetParameter("ema-fast"))
+        self.emaSlow = int(self.GetParameter("ema-slow"))
+
         self.SetBrokerageModel(BrokerageName.OandaBrokerage)
-        
+
+        self.Log('--- PARAMS ---')
+        self.Log(f'grid-space: {self.gridSpace} | max-open: {self.maxOpen} | ema-fast: {self.emaFast} | ema-slow: {self.emaSlow}')
+
         self.Data = {}
 
         for ticker in ["EURUSD"]:
             symbol = self.AddForex(ticker , Resolution.Minute, Market.Oanda).Symbol
             self.Log('Initializing data for ' + str(symbol))
-            
-            emaFast = self.EMA(symbol, int(self.GetParameter("ema-fast")), Resolution.Hour)
-            emaSlow = self.EMA(symbol, int(self.GetParameter("ema-slow")), Resolution.Hour)
+
+            emaFast = self.EMA(symbol, self.emaFast, Resolution.Hour)
+            emaSlow = self.EMA(symbol, self.emaSlow, Resolution.Hour)
             
             self.Data[symbol] = SymbolData(emaFast, emaSlow)
             
@@ -33,6 +40,7 @@ class TrendGrid(QCAlgorithm):
             price = data[symbol].Close
             emaFast = symData.emaFast.Current.Value
             emaSlow = symData.emaSlow.Current.Value
+                
             
             if emaFast > emaSlow:
                 
@@ -79,11 +87,12 @@ class TrendGrid(QCAlgorithm):
                 originalEntry = self.checkEntries(originalEntryPrice, self.Data[symbol].openEntries)
                 if originalEntry != None:
                     self.Data[symbol].openEntries.remove(originalEntry)
-                    
+
                 entriesCurrentPrice = self.checkEntries(price, self.Data[symbol].openEntries)
                 if entriesCurrentPrice == None:
                     self.tradeLong(symbol)
                 else:
+                    self.Log(f'Currently open trades: {self.Data[symbol].openEntries}')
                     self.Log(f'Open entry already at {entriesCurrentPrice}')
 
             elif orderEvent.FillQuantity > 0:
@@ -99,10 +108,15 @@ class TrendGrid(QCAlgorithm):
                 if entriesCurrentPrice == None:
                     self.tradeShort(symbol)
                 else:
+                    self.Log(f'Currently open trades: {self.Data[symbol].openEntries}')
                     self.Log(f'Open entry already at {entriesCurrentPrice}')
                 
             
     def tradeLong(self, symbol):
+        if len(self.Data[symbol].openEntries) >= self.maxOpen:
+            self.Log('Max open trades reached!')
+            return
+
         market = self.MarketOrder(symbol, self.orderQuantity)
         price = market.AverageFillPrice
         # price = self.Securities[symbol].Price
@@ -117,6 +131,10 @@ class TrendGrid(QCAlgorithm):
         self.Data[symbol].openEntries.append(price)
         
     def tradeShort(self, symbol):
+        if len(self.Data[symbol].openEntries) >= self.maxOpen:
+            self.Log('Max open trades reached!')
+            return
+
         market = self.MarketOrder(symbol, - self.orderQuantity)
         price = market.AverageFillPrice
         self.Data[symbol].entry = price
@@ -139,7 +157,6 @@ class TrendGrid(QCAlgorithm):
         self.Data[symbol].openEntries = []
 
     def checkEntries(self, price, openlist):
-        self.Log(f'Currently open: {openlist}')
         result = None
         for i in range(len(openlist)):
             if openlist[i] < (price + (0.5 * self.gridSpace)) and openlist[i] > (price - (0.5 * self.gridSpace)):
