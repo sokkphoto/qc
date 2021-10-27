@@ -6,28 +6,30 @@ class TrendGrid(QCAlgorithm):
         self.SetCash(10000)
         
         self.orderQuantity = int(self.GetParameter("order-quantity"))
-        self.gridSpace = float(self.GetParameter("grid-space"))
+        self.gridSpaceAtr = float(self.GetParameter("grid-space-atr"))
         self.maxOpen = int(self.GetParameter("max-open"))
         self.profitTargetPips = int(self.GetParameter("profit-target-pips"))
         self.unrealizedPLStop = int(self.GetParameter("unrealized-pl-stop"))
         self.emaFast = int(self.GetParameter("ema-fast"))
         self.emaSlow = int(self.GetParameter("ema-slow"))
+        self.atrPeriod = self.emaSlow / 2
 
         self.SetBrokerageModel(BrokerageName.OandaBrokerage)
 
         self.Log('--- PARAMS ---')
-        self.Log(f'grid-space: {self.gridSpace} | max-open: {self.maxOpen} | ema-fast: {self.emaFast} | ema-slow: {self.emaSlow}')
+        self.Log(f'grid-space-atr: {self.gridSpaceAtr} | profit-target-pips: {self.profitTargetPips} | max-open: {self.maxOpen} | ema-fast: {self.emaFast} | ema-slow: {self.emaSlow}')
 
         self.Data = {}
 
-        for ticker in ["EURGBP"]:
+        for ticker in ["EURUSD"]:
             symbol = self.AddForex(ticker , Resolution.Minute, Market.Oanda).Symbol
             self.Log('Initializing data for ' + str(symbol))
 
             emaFast = self.EMA(symbol, self.emaFast, Resolution.Hour)
             emaSlow = self.EMA(symbol, self.emaSlow, Resolution.Hour)
+            atr = self.ATR(symbol, int(self.atrPeriod), MovingAverageType.Simple, Resolution.Hour)
             
-            self.Data[symbol] = SymbolData(emaFast, emaSlow)
+            self.Data[symbol] = SymbolData(emaFast, emaSlow, atr)
             
         warmupPeriod = int(self.GetParameter("ema-slow"))
         self.SetWarmUp(warmupPeriod, Resolution.Hour)
@@ -46,36 +48,46 @@ class TrendGrid(QCAlgorithm):
             
             if self.Portfolio[symbol].IsLong:
                 unrealizedPL = self.unrealizedPL(price, symData.openEntries, 1)
-                totalPL = unrealizedPL + self.realizedPL(symData.tpCount)
+                totalPL = unrealizedPL + self.realizedPL(symbol, symData.tpCount)
                 
                 if totalPL >= self.profitTargetPips or unrealizedPL < self.unrealizedPLStop:
                     self.Log(f'--- Profit target / PL stop reached on long {symbol}, total PL: {totalPL} ---')
                     self.closeAll(symbol)
+                # early exit
+                elif emaFast < emaSlow and unrealizedPL > 0:
+                    self.Log(f'Trend reversed. Unrealized: {unrealizedPL}')
+                    self.closeAll(symbol)
                 elif price < symData.prevLine:
                     self.Log(f'Lower line hit on long {symbol} @ {price}')
                     self.Log(f'Total PL: {totalPL} | Open: {symData.openEntries}')
-                    if self.checkEntries(price, symData.openEntries) == None:
+                    if self.checkEntries(symbol, price, symData.openEntries) == None:
                         self.tradeLong(symbol)
 
             if self.Portfolio[symbol].IsShort:
                 unrealizedPL = self.unrealizedPL(price, symData.openEntries, -1)
-                totalPL = unrealizedPL + self.realizedPL(symData.tpCount)
+                totalPL = unrealizedPL + self.realizedPL(symbol, symData.tpCount)
                 
                 if totalPL >= self.profitTargetPips or unrealizedPL < self.unrealizedPLStop:
                     self.Log(f'--- Profit target / PL stop reached on short {symbol}, total PL: {totalPL} ---')
                     self.closeAll(symbol)
+                # early exit
+                elif emaFast > emaSlow and unrealizedPL > 0:
+                    self.Log(f'Trend reversed. Unrealized: {unrealizedPL}')
+                    self.closeAll(symbol)
                 elif price > symData.prevLine:
                     self.Log(f'Upper line hit on short {symbol} @ {price}')
                     self.Log(f'Total PL: {totalPL} | Open: {symData.openEntries}')
-                    if self.checkEntries(price, symData.openEntries) == None:
+                    if self.checkEntries(symbol, price, symData.openEntries) == None:
                         self.tradeShort(symbol)
-
+                        
             if not self.Portfolio[symbol].Invested:
-                if emaFast > emaSlow:
-                    self.Log(f'Initial long with {symbol} @ {price}')
+                if emaFast > emaSlow and price < emaFast:
+                    symData.gridSpace = symData.atr.Current.Value * self.gridSpaceAtr
+                    self.Log(f'Initial long with {symbol} @ {price} | Grid spacing: {symData.gridSpace}')
                     self.tradeLong(symbol)
-                elif emaFast < emaSlow:
-                    self.Log(f'Initial short with {symbol} @ {price}')
+                elif emaFast < emaSlow and price > emaFast:
+                    symData.gridSpace = symData.atr.Current.Value * self.gridSpaceAtr
+                    self.Log(f'Initial short with {symbol} @ {price} | Grid spacing: {symData.gridSpace}')
                     self.tradeShort(symbol)
                     
 
@@ -91,12 +103,12 @@ class TrendGrid(QCAlgorithm):
                 self.Data[symbol].tpCount += 1
                 
                 #delete original entry from openEntries
-                originalEntryPrice = price - self.gridSpace
-                originalEntry = self.checkEntries(originalEntryPrice, self.Data[symbol].openEntries)
+                originalEntryPrice = price - self.Data[symbol].gridSpace
+                originalEntry = self.checkEntries(symbol, originalEntryPrice, self.Data[symbol].openEntries)
                 if originalEntry != None:
                     self.Data[symbol].openEntries.remove(originalEntry)
 
-                entriesCurrentPrice = self.checkEntries(price, self.Data[symbol].openEntries)
+                entriesCurrentPrice = self.checkEntries(symbol, price, self.Data[symbol].openEntries)
                 if entriesCurrentPrice == None:
                     self.Log(f'Currently open trades: {self.Data[symbol].openEntries}')
                     self.Log(f'Opening long on {symbol} @ {price}')
@@ -110,12 +122,12 @@ class TrendGrid(QCAlgorithm):
                 self.Data[symbol].tpCount += 1
                 
                 #delete original entry from openEntries
-                originalEntryPrice = price + self.gridSpace
-                originalEntry = self.checkEntries(originalEntryPrice, self.Data[symbol].openEntries)
+                originalEntryPrice = price + self.Data[symbol].gridSpace
+                originalEntry = self.checkEntries(symbol, originalEntryPrice, self.Data[symbol].openEntries)
                 if originalEntry != None:
                     self.Data[symbol].openEntries.remove(originalEntry)
 
-                entriesCurrentPrice = self.checkEntries(price, self.Data[symbol].openEntries)
+                entriesCurrentPrice = self.checkEntries(symbol, price, self.Data[symbol].openEntries)
                 if entriesCurrentPrice == None:
                     self.Log(f'Currently open trades: {self.Data[symbol].openEntries}')
                     self.Log(f'Opening short on {symbol} @ {price}')
@@ -133,11 +145,11 @@ class TrendGrid(QCAlgorithm):
         price = market.AverageFillPrice
         # price = self.Securities[symbol].Price
         self.Data[symbol].entry = price
-        target = round(price + self.gridSpace , 5)
+        target = round(price + self.Data[symbol].gridSpace , 5)
         self.LimitOrder(symbol, - self.orderQuantity, target)
 
         self.Data[symbol].entry = price
-        self.Data[symbol].prevLine = price - self.gridSpace
+        self.Data[symbol].prevLine = price - self.Data[symbol].gridSpace
         self.Data[symbol].openEntries.append(price)
         
     def tradeShort(self, symbol):
@@ -148,11 +160,11 @@ class TrendGrid(QCAlgorithm):
         market = self.MarketOrder(symbol, - self.orderQuantity)
         price = market.AverageFillPrice
         self.Data[symbol].entry = price
-        target = round(price - self.gridSpace , 5)
+        target = round(price - self.Data[symbol].gridSpace , 5)
         self.LimitOrder(symbol, self.orderQuantity, target)
 
         self.Data[symbol].entry = price
-        self.Data[symbol].prevLine = price + self.gridSpace
+        self.Data[symbol].prevLine = price + self.Data[symbol].gridSpace
         self.Data[symbol].openEntries.append(price)
 
     def closeAll(self, symbol):
@@ -164,10 +176,10 @@ class TrendGrid(QCAlgorithm):
         self.Data[symbol].openEntries = []
         self.Data[symbol].tpCount = 0
 
-    def checkEntries(self, price, openlist):
+    def checkEntries(self, symbol, price, openlist):
         result = None
         for i in range(len(openlist)):
-            if openlist[i] < (price + (0.5 * self.gridSpace)) and openlist[i] > (price - (0.5 * self.gridSpace)):
+            if openlist[i] < (price + (0.5 * self.Data[symbol].gridSpace)) and openlist[i] > (price - (0.5 * self.Data[symbol].gridSpace)):
                 result = openlist[i]
         return result
 
@@ -180,16 +192,17 @@ class TrendGrid(QCAlgorithm):
                 unrealized += openlist[i] - price
         return round(unrealized * 10000)
 
-    def realizedPL(self, tpcount):
-        return round(tpcount * self.gridSpace * 10000)
+    def realizedPL(self, symbol, tpcount):
+        return round(tpcount * self.Data[symbol].gridSpace * 10000)
         
     
             
 class SymbolData:
     
-    def __init__(self, emaFast, emaSlow):
+    def __init__(self, emaFast, emaSlow, atr):
         self.emaFast = emaFast
         self.emaSlow = emaSlow
+        self.atr = atr
         self.openEntries = []
         self.tpCount = 0
 

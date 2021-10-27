@@ -16,9 +16,10 @@
 https://www.quantconnect.com/docs/algorithm-reference/securities-and-portfolio
 
 + 21-10-25 use unrealizedProfit target before closeAll
-looks good! ema-slow: 500, grid-space: 20, profit-target-pips: 120
-if price > emaSlow: long
 
++ 27-10-25 add condition to exit early if trend reverses.
+if trend reversed & totalPL > 0: closeAll
++ added ATR multiplier for gridspace
 
 
 
