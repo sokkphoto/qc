@@ -9,9 +9,18 @@
 
 + store list of openEntries with each short & long
 
-+ added max-open
++ added max-open param
 
-- try: liquidate if maxOpenTrades reached
-if trend reverses, open new grid
+-------
++ try: liquidate if in profit by n $
+https://www.quantconnect.com/docs/algorithm-reference/securities-and-portfolio
 
-- try: liquidate if in profit by n pips
++ 21-10-25 use unrealizedProfit target before closeAll
+looks good! ema-slow: 500, grid-space: 20, profit-target-pips: 120
+if price > emaSlow: long
+
+
+
+
+-------
+- try: trade to revert to slow EMA
