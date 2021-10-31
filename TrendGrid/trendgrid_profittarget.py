@@ -2,7 +2,7 @@ class TrendGrid(QCAlgorithm):
 
     def Initialize(self):
         self.SetStartDate(2021, 1, 1)
-        self.SetEndDate(2021, 3, 1)
+        self.SetEndDate(2021, 9, 1)
         self.SetCash(10000)
         
         self.orderQuantity = int(self.GetParameter("order-quantity"))
@@ -10,26 +10,33 @@ class TrendGrid(QCAlgorithm):
         self.maxOpen = int(self.GetParameter("max-open"))
         self.profitTargetPips = int(self.GetParameter("profit-target-pips"))
         self.unrealizedPLStop = int(self.GetParameter("unrealized-pl-stop"))
-        self.emaFast = int(self.GetParameter("ema-fast"))
-        self.emaSlow = int(self.GetParameter("ema-slow"))
-        self.atrPeriod = self.emaSlow / 2
+        #self.PLStop = int(self.GetParameter("pl-stop"))
+        self.emaExp = float(self.GetParameter("opt-ema-exp"))
+        self.emaFast = int(10 ** self.emaExp)
+        self.emaSlow = int(50 ** self.emaExp)
+    
+        #self.emaFast = int(self.GetParameter("ema-fast"))
+        #self.emaSlow = int(self.GetParameter("ema-slow"))
+        self.atrPeriod = self.emaSlow
 
         self.SetBrokerageModel(BrokerageName.OandaBrokerage)
 
         self.Log('--- PARAMS ---')
-        self.Log(f'grid-space-atr: {self.gridSpaceAtr} | profit-target-pips: {self.profitTargetPips} | max-open: {self.maxOpen} | ema-fast: {self.emaFast} | ema-slow: {self.emaSlow}')
+        self.Log(f'grid-space-atr: {self.gridSpaceAtr} | profit-target-pips: {self.profitTargetPips} | unrealized-pl-stop: {self.unrealizedPLStop} | max-open: {self.maxOpen} | ema-fast: {self.emaFast} | ema-slow: {self.emaSlow}')
 
         self.Data = {}
 
-        for ticker in ["EURUSD"]:
+        for ticker in ["GBPJPY"]:
             symbol = self.AddForex(ticker , Resolution.Minute, Market.Oanda).Symbol
             self.Log('Initializing data for ' + str(symbol))
 
             emaFast = self.EMA(symbol, self.emaFast, Resolution.Hour)
             emaSlow = self.EMA(symbol, self.emaSlow, Resolution.Hour)
             atr = self.ATR(symbol, int(self.atrPeriod), MovingAverageType.Simple, Resolution.Hour)
-            
+
             self.Data[symbol] = SymbolData(emaFast, emaSlow, atr)
+            
+            self.Data[symbol].unrealizedPLStop = self.toPips(symbol, self.convertPips(symbol, self.unrealizedPLStop))
             
         warmupPeriod = int(self.GetParameter("ema-slow"))
         self.SetWarmUp(warmupPeriod, Resolution.Hour)
@@ -47,15 +54,15 @@ class TrendGrid(QCAlgorithm):
             
             
             if self.Portfolio[symbol].IsLong:
-                unrealizedPL = self.unrealizedPL(price, symData.openEntries, 1)
+                unrealizedPL = self.unrealizedPL(symbol, price, symData.openEntries, 1)
                 totalPL = unrealizedPL + self.realizedPL(symbol, symData.tpCount)
                 
-                if totalPL >= self.profitTargetPips or unrealizedPL < self.unrealizedPLStop:
-                    self.Log(f'--- Profit target / PL stop reached on long {symbol}, total PL: {totalPL} ---')
+                if totalPL >= self.profitTargetPips or unrealizedPL < symData.unrealizedPLStop:
+                    self.Log(f'--- Profit target / PL stop reached on long {symbol} | total PL: {totalPL} | unrealized: {unrealizedPL}---')
                     self.closeAll(symbol)
                 # early exit
-                elif emaFast < emaSlow and unrealizedPL > 0:
-                    self.Log(f'Trend reversed. Unrealized: {unrealizedPL}')
+                elif emaFast < emaSlow and totalPL > 0:
+                    self.Log(f'--- Trend reversed. PL: {totalPL} ---')
                     self.closeAll(symbol)
                 elif price < symData.prevLine:
                     self.Log(f'Lower line hit on long {symbol} @ {price}')
@@ -64,15 +71,15 @@ class TrendGrid(QCAlgorithm):
                         self.tradeLong(symbol)
 
             if self.Portfolio[symbol].IsShort:
-                unrealizedPL = self.unrealizedPL(price, symData.openEntries, -1)
+                unrealizedPL = self.unrealizedPL(symbol, price, symData.openEntries, -1)
                 totalPL = unrealizedPL + self.realizedPL(symbol, symData.tpCount)
                 
-                if totalPL >= self.profitTargetPips or unrealizedPL < self.unrealizedPLStop:
-                    self.Log(f'--- Profit target / PL stop reached on short {symbol}, total PL: {totalPL} ---')
+                if totalPL >= self.profitTargetPips or unrealizedPL < symData.unrealizedPLStop:
+                    self.Log(f'--- Profit target / PL stop reached on short {symbol} | total PL: {totalPL} | unrealized: {unrealizedPL}---')
                     self.closeAll(symbol)
                 # early exit
-                elif emaFast > emaSlow and unrealizedPL > 0:
-                    self.Log(f'Trend reversed. Unrealized: {unrealizedPL}')
+                elif emaFast > emaSlow and totalPL > 0:
+                    self.Log(f'--- Trend reversed. PL: {totalPL} ---')
                     self.closeAll(symbol)
                 elif price > symData.prevLine:
                     self.Log(f'Upper line hit on short {symbol} @ {price}')
@@ -183,17 +190,34 @@ class TrendGrid(QCAlgorithm):
                 result = openlist[i]
         return result
 
-    def unrealizedPL(self, price, openlist, direction):
+    def unrealizedPL(self, symbol, price, openlist, direction):
         unrealized = 0
         for i in range(len(openlist)):
             if direction > 0:
                 unrealized += price - openlist[i]
             elif direction < 0:
                 unrealized += openlist[i] - price
-        return round(unrealized * 10000)
+        return self.toPips(symbol, unrealized)
 
     def realizedPL(self, symbol, tpcount):
-        return round(tpcount * self.Data[symbol].gridSpace * 10000)
+        realized = round(tpcount * self.Data[symbol].gridSpace)
+        return self.toPips(symbol, realized)
+
+    def convertPips(self, symbol, pips):
+        last = str(symbol)[3:]
+        if last == "JPY":
+            converted = pips / 100
+        else:
+            converted = pips / 10000
+        return converted
+
+    def toPips(self, symbol, price):
+        last = str(symbol)[3:]
+        if last == "JPY":
+            pips = price * 100
+        else:
+            pips = price * 10000
+        return pips
         
     
             
@@ -205,5 +229,3 @@ class SymbolData:
         self.atr = atr
         self.openEntries = []
         self.tpCount = 0
-
-        
