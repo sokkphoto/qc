@@ -1,5 +1,6 @@
 from AlgorithmImports import *
 import datetime
+import pandas as pd
 
 class VolatilityCheck(QCAlgorithm):
 
@@ -15,6 +16,10 @@ class VolatilityCheck(QCAlgorithm):
         self.SetBrokerageModel(BrokerageName.OandaBrokerage)
 
         self.Data = {}
+
+        self.results = pd.DataFrame()
+        headers = ['symbol', 'min_long', 'max_long', 'min_short', 'max_short', 'avg_long', 'avg_short', 'long_short_ratio']
+        self.results = self.results.reindex(columns = headers)
 
         for ticker in ["GBPJPY", "EURUSD"]:
             symbol = self.AddForex(ticker , Resolution.Hour, Market.Oanda).Symbol
@@ -48,17 +53,8 @@ class VolatilityCheck(QCAlgorithm):
             
             rangeLong = symData.maxLong.Current.Value - symData.minLong.Current.Value
             rangeShort = symData.maxShort.Current.Value - symData.minShort.Current.Value
-            
-
-            if rangeLong > symData.maxRangeLong or symData.maxRangeLong == 0:
-                symData.maxRangeLong = rangeLong
-            if rangeLong < symData.minRangeLong or symData.minRangeLong == 0:
-                symData.minRangeLong = rangeLong
-
-            if rangeShort > symData.maxRangeShort or symData.maxRangeShort == 0:
-                symData.maxRangeShort = rangeShort
-            if rangeShort < symData.minRangeShort or symData.minRangeShort == 0:
-                symData.minRangeShort = rangeShort
+            rangeLong = (rangeLong / data[symbol].Close) * 100
+            rangeShort = (rangeShort / data[symbol].Close) * 100
             
             self.Plot(f'{symbol}', 'maxLong', symData.maxLong.Current.Value)
             self.Plot(f'{symbol}', 'minLong', symData.minLong.Current.Value)
@@ -74,23 +70,30 @@ class VolatilityCheck(QCAlgorithm):
                 return round(a, 4)
 
             if self.Time.date() == self.endDate - timedelta(days = 1) and self.Time.hour == 00:
-                longShortRatio = round(average(symData.rangesLong) / average(symData.rangesShort), 4)
+                minRangeLong = round(min(symData.rangesLong), 4)
+                maxRangeLong = round(max(symData.rangesLong), 4)
+                avgRangeLong = average(symData.rangesLong)
+                minRangeShort = round(min(symData.rangesShort), 4)
+                maxRangeShort = round(max(symData.rangesShort), 4)
+                avgRangeShort = average(symData.rangesShort)
+                longShortRatio = round(avgRangeLong / avgRangeShort, 4)
 
                 self.Log(f'{symbol} --- long/short ratio: {longShortRatio} ---')
-                self.Log(f'{symbol} - min range long: {round(min(symData.rangesLong), 4)}')
-                self.Log(f'{symbol} - max range long: {round(max(symData.rangesLong), 4)}')
-                self.Log(f'{symbol} - avg range long: {average(symData.rangesLong)}')
-                
-                self.Log(f'{symbol} - min range short: {round(min(symData.rangesShort), 4)}')
-                self.Log(f'{symbol} - max range short: {round(max(symData.rangesShort), 4)}')
-                self.Log(f'{symbol} - avg range short: {average(symData.rangesShort)}')
+                self.Log(f'{symbol} - min range long %: {minRangeLong}')
+                self.Log(f'{symbol} - max range long %: {maxRangeLong}')
+                self.Log(f'{symbol} - avg range long %: {avgRangeLong}')
+                self.Log(f'{symbol} - min range short %: {minRangeShort}')
+                self.Log(f'{symbol} - max range short %: {maxRangeShort}')
+                self.Log(f'{symbol} - avg range short %: {avgRangeShort}')
                 self.Log('-------------------------------')
 
+                newrow = {'symbol': str(symbol), 'min_long': minRangeLong, 'max_long': maxRangeLong, 'avg_long': avgRangeLong, 
+                        'min_short': minRangeShort, 'max_short': maxRangeShort, 'avg_short': avgRangeShort, 'long_short_ratio': longShortRatio}
+                self.results = self.results.append(newrow, ignore_index = True)
 
-            
+        if self.Time.date() == self.endDate - timedelta(days = 1) and self.Time.hour == 00:        
+            self.Log(self.results.to_dict())
 
-        
-    
             
 class SymbolData:
     
