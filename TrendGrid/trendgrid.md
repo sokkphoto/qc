@@ -23,17 +23,22 @@ if trend reversed & totalPL > 0: closeAll
 
 + for JPY pairs - convert target & stop to multiple of gridSpace
 
-- pairs with best volatility? indi to measure?
 
 - use emaMid for trend confirmation ?
 review charts
 
 - try: early exit if totalPL > (profitTargetPips / 2)
 
-+ calc general grid ranges to optimize unrealized PL stop
-setting to -1000
-
 
 
 -------
-- try: trade to revert to slow EMA
++ indi to measure?
+https://www.elearnmarkets.com/blog/know-5-important-volatility-indicators
+
+- to fbacktest - get longest grid periods for different pairs? EURCHF, EURGBP, GBPUSD, GBPJPY, AUDPY
+
+- get pairs with best volatility / long term range (for mean reversion)
+- get pairs with best volatility (for trend)
+
+- mean reversion methods? trade to revert to slow EMA?
+- signals for trending pairs? supertrend? MACD
