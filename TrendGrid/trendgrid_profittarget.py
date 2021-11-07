@@ -1,8 +1,12 @@
+from AlgorithmImports import *
+import datetime
+
 class TrendGrid(QCAlgorithm):
 
     def Initialize(self):
-        self.SetStartDate(2021, 1, 1)
-        self.SetEndDate(2021, 9, 1)
+        self.SetStartDate(2020, 1, 1)
+        self.endDate = datetime.date(2021, 1, 1)
+        self.SetEndDate(self.endDate)
         self.SetCash(10000)
         
         self.orderQuantity = int(self.GetParameter("order-quantity"))
@@ -26,7 +30,7 @@ class TrendGrid(QCAlgorithm):
 
         self.Data = {}
 
-        for ticker in ["GBPJPY"]:
+        for ticker in ["EURCHF"]:
             symbol = self.AddForex(ticker , Resolution.Minute, Market.Oanda).Symbol
             self.Log('Initializing data for ' + str(symbol))
 
@@ -89,13 +93,28 @@ class TrendGrid(QCAlgorithm):
                         
             if not self.Portfolio[symbol].Invested:
                 if emaFast > emaSlow and price < emaFast:
-                    symData.gridSpace = symData.atr.Current.Value * self.gridSpaceAtr
+                    symData.gridSpace = round(symData.atr.Current.Value * self.gridSpaceAtr, 4)
                     self.Log(f'Initial long with {symbol} @ {price} | Grid spacing: {symData.gridSpace}')
                     self.tradeLong(symbol)
+                    symData.gridStart = self.Time
                 elif emaFast < emaSlow and price > emaFast:
-                    symData.gridSpace = symData.atr.Current.Value * self.gridSpaceAtr
+                    symData.gridSpace = round(symData.atr.Current.Value * self.gridSpaceAtr, 4)
                     self.Log(f'Initial short with {symbol} @ {price} | Grid spacing: {symData.gridSpace}')
                     self.tradeShort(symbol)
+                    symData.gridStart = self.Time
+
+            # log grid times in h
+            def average(lst):
+                a = sum(lst) / len(lst)
+                return round(a, 4)
+
+            if self.Time.date() == self.endDate - timedelta(days = 1) and self.Time.hour == 23:
+                minGridTime = round(min(symData.gridHours), 2)
+                maxGridTime = round(max(symData.gridHours), 2)
+                avgGridTime = round(average(symData.gridHours), 2)
+                self.Log(f'{symbol} - min grid hours: {minGridTime}')
+                self.Log(f'{symbol} - max grid hours: {maxGridTime}')
+                self.Log(f'{symbol} - avg grid hours: {avgGridTime}')
                     
 
                     
@@ -183,6 +202,16 @@ class TrendGrid(QCAlgorithm):
         self.Data[symbol].openEntries = []
         self.Data[symbol].tpCount = 0
 
+        # calculate and store grid period in h
+        self.Data[symbol].gridEnd = self.Time
+        diff = self.Data[symbol].gridEnd - self.Data[symbol].gridStart
+        diff = round(diff.total_seconds() / 3600, 2)
+        self.Data[symbol].gridHours.append(diff)
+        self.Data[symbol].gridEnd = None
+        self.Data[symbol].gridStart = None
+        self.Log(f'{symbol} - grid hours so far: {self.Data[symbol].gridHours}')
+
+
     def checkEntries(self, symbol, price, openlist):
         result = None
         for i in range(len(openlist)):
@@ -229,3 +258,4 @@ class SymbolData:
         self.atr = atr
         self.openEntries = []
         self.tpCount = 0
+        self.gridHours = []
