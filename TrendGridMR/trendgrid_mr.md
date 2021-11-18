@@ -10,7 +10,8 @@ profit target
 
 - entry - n x ATR above/below fast EMA. try with 2x
 
-- profit-target and unrealized-pl-stop to use ATR units
++ remove pip conversions for JPY, HUF, INR
++ profit-target and unrealized-pl-stop to use ATR units
 
 - entry filter - if 30 day high/low reached in last x hours, no entry
 
