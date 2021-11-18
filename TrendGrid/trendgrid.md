@@ -23,6 +23,13 @@ if trend reversed & totalPL > 0: closeAll
 
 + for JPY pairs - convert target & stop to multiple of gridSpace
 
+- bug - EURHUF - too many open trades at same level opened, grid not calculated correctly
+
+
++ create simple version:
+new grid direction on EMA cross (consider ranging conditions)
+no profit target?
+
 
 - use emaMid for trend confirmation ?
 review charts
@@ -38,8 +45,8 @@ https://www.elearnmarkets.com/blog/know-5-important-volatility-indicators
 + to backtest - get approx longest grid periods for different pairs? EURCHF, EURGBP, GBPUSD, GBPJPY, AUDJPY -> avg between 78-573; max between 330-1897
 - get min, max, average time to TP 
 
-- get pairs with best short term range / long term range ratio (for mean reversion)
-- get pairs with best longterm range (for trend) -> get range according to grid period
++ get pairs with best short term range / long term range ratio (for mean reversion)
++ get pairs with best longterm range (for trend) -> get range according to grid period
 
 - mean reversion methods? trade to revert to slow EMA?
 - signals for trending pairs? supertrend? MACD

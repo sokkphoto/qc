@@ -4,8 +4,8 @@ import datetime
 class TrendGrid(QCAlgorithm):
 
     def Initialize(self):
-        self.SetStartDate(2020, 1, 1)
-        self.endDate = datetime.date(2021, 1, 1)
+        self.SetStartDate(2021, 1, 1)
+        self.endDate = datetime.date(2021, 10, 1)
         self.SetEndDate(self.endDate)
         self.SetCash(10000)
         
@@ -16,11 +16,11 @@ class TrendGrid(QCAlgorithm):
         self.unrealizedPLStop = int(self.GetParameter("unrealized-pl-stop"))
         #self.PLStop = int(self.GetParameter("pl-stop"))
         self.emaExp = float(self.GetParameter("opt-ema-exp"))
-        self.emaFast = int(10 ** self.emaExp)
-        self.emaSlow = int(50 ** self.emaExp)
+        # self.emaFast = int(10 ** self.emaExp)
+        # self.emaSlow = int(50 ** self.emaExp)
     
-        #self.emaFast = int(self.GetParameter("ema-fast"))
-        #self.emaSlow = int(self.GetParameter("ema-slow"))
+        self.emaFast = int(self.GetParameter("ema-fast"))
+        self.emaSlow = int(self.GetParameter("ema-slow"))
         self.atrPeriod = self.emaSlow
 
         self.SetBrokerageModel(BrokerageName.OandaBrokerage)
@@ -64,10 +64,7 @@ class TrendGrid(QCAlgorithm):
                 if totalPL >= self.profitTargetPips or unrealizedPL < symData.unrealizedPLStop:
                     self.Log(f'--- Profit target / PL stop reached on long {symbol} | total PL: {totalPL} | unrealized: {unrealizedPL}---')
                     self.closeAll(symbol)
-                # early exit
-                elif emaFast < emaSlow and totalPL > 0:
-                    self.Log(f'--- Trend reversed. PL: {totalPL} ---')
-                    self.closeAll(symbol)
+                
                 elif price < symData.prevLine:
                     self.Log(f'Lower line hit on long {symbol} @ {price}')
                     self.Log(f'Total PL: {totalPL} | Open: {symData.openEntries}')
@@ -81,10 +78,7 @@ class TrendGrid(QCAlgorithm):
                 if totalPL >= self.profitTargetPips or unrealizedPL < symData.unrealizedPLStop:
                     self.Log(f'--- Profit target / PL stop reached on short {symbol} | total PL: {totalPL} | unrealized: {unrealizedPL}---')
                     self.closeAll(symbol)
-                # early exit
-                elif emaFast > emaSlow and totalPL > 0:
-                    self.Log(f'--- Trend reversed. PL: {totalPL} ---')
-                    self.closeAll(symbol)
+
                 elif price > symData.prevLine:
                     self.Log(f'Upper line hit on short {symbol} @ {price}')
                     self.Log(f'Total PL: {totalPL} | Open: {symData.openEntries}')
@@ -92,12 +86,12 @@ class TrendGrid(QCAlgorithm):
                         self.tradeShort(symbol)
                         
             if not self.Portfolio[symbol].Invested:
-                if emaFast > emaSlow and price < emaFast:
+                if emaFast < emaSlow and price < emaFast:
                     symData.gridSpace = round(symData.atr.Current.Value * self.gridSpaceAtr, 4)
                     self.Log(f'Initial long with {symbol} @ {price} | Grid spacing: {symData.gridSpace}')
                     self.tradeLong(symbol)
                     symData.gridStart = self.Time
-                elif emaFast < emaSlow and price > emaFast:
+                elif emaFast > emaSlow and price > emaFast:
                     symData.gridSpace = round(symData.atr.Current.Value * self.gridSpaceAtr, 4)
                     self.Log(f'Initial short with {symbol} @ {price} | Grid spacing: {symData.gridSpace}')
                     self.tradeShort(symbol)
