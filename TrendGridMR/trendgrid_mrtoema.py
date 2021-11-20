@@ -68,7 +68,7 @@ class TrendGrid(QCAlgorithm):
                 
                 elif price < symData.prevLine:
                     self.Log(f'Lower line hit on long {symbol} @ {price}')
-                    self.Log(f'Total PL: {totalPL} | Open: {symData.openEntries}')
+                    self.Log(f'Total PL: {totalPL} | Unrealized PL: {unrealizedPL}| Open: {symData.openEntries}')
                     if self.checkEntries(symbol, price, symData.openEntries) == None:
                         self.tradeLong(symbol)
 
@@ -82,23 +82,24 @@ class TrendGrid(QCAlgorithm):
 
                 elif price > symData.prevLine:
                     self.Log(f'Upper line hit on short {symbol} @ {price}')
-                    self.Log(f'Total PL: {totalPL} | Open: {symData.openEntries}')
+                    self.Log(f'Total PL: {totalPL} | Unrealized PL: {unrealizedPL}| Open: {symData.openEntries}')
                     if self.checkEntries(symbol, price, symData.openEntries) == None:
                         self.tradeShort(symbol)
 
             if not self.Portfolio[symbol].Invested:
-                def symbolGridParams():
-                    symData.gridSpace = round(symData.atr.Current.Value * self.gridSpaceAtr, 4)
+                gs = round(symData.atr.Current.Value * self.gridSpaceAtr, 4)
+                def symbolGridParams(gs):
+                    symData.gridSpace = gs
                     symData.unrealizedPLStop = round(symData.atr.Current.Value * self.unrealizedPLStopATRs, 4)
                     symData.profitTarget = round(symData.atr.Current.Value * self.profitTargetATRs, 4)
 
-                if emaFast < emaSlow and price < emaFast:
-                    symbolGridParams()
+                if emaFast < emaSlow and (price - gs) < emaFast:
+                    symbolGridParams(gs)
                     self.Log(f'Initial long with {symbol} @ {price} | Grid spacing: {symData.gridSpace} | uPL stop: {symData.unrealizedPLStop} | Profit target: {symData.profitTarget}')
                     self.tradeLong(symbol)
                     symData.gridStart = self.Time
-                elif emaFast > emaSlow and price > emaFast:
-                    symbolGridParams()
+                elif emaFast > emaSlow and (price + gs) > emaFast:
+                    symbolGridParams(gs)
                     self.Log(f'Initial short with {symbol} @ {price} | Grid spacing: {symData.gridSpace} | uPL stop: {symData.unrealizedPLStop} | Profit target: {symData.profitTarget}')
                     self.tradeShort(symbol)
                     symData.gridStart = self.Time
@@ -227,7 +228,8 @@ class TrendGrid(QCAlgorithm):
         return round(unrealized, 4)
 
     def realizedPL(self, symbol, tpcount):
-        realized = round(tpcount * self.Data[symbol].gridSpace)
+        realized = tpcount * self.Data[symbol].gridSpace
+        self.Log(f'tpcount {tpcount}, gridspace {self.Data[symbol].gridSpace}, realized {realized}')
         return round(realized, 4)
         
     

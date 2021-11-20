@@ -8,7 +8,14 @@ profit target
 
 ## To Do
 
-- entry - n x ATR above/below fast EMA. try with 2x
+- test grid direction (eurchf, only short, 2021)
+
+- test - grid direction on 2021-04-06 (ema's)
+- test - why entry with gridspace + price -> worse perf
+
++ fix total PL calc
+
++ entry - n x ATR above/below fast EMA. try with 2x
 
 + remove pip conversions for JPY, HUF, INR
 + profit-target and unrealized-pl-stop to use ATR units
