@@ -31,7 +31,7 @@ class TrendGrid(QCAlgorithm):
         self.Data = {}
 
         for ticker in ["EURCHF"]:
-            symbol = self.AddForex(ticker , Resolution.Minute, Market.Oanda).Symbol
+            symbol = self.AddForex(ticker , Resolution.Hour, Market.Oanda).Symbol
             self.Log('Initializing data for ' + str(symbol))
 
             emaFast = self.EMA(symbol, self.emaFast, Resolution.Hour)
@@ -40,11 +40,23 @@ class TrendGrid(QCAlgorithm):
 
             self.Data[symbol] = SymbolData(emaFast, emaSlow, atr)
             
-            # self.Data[symbol].unrealizedPLStop = self.toPips(symbol, self.convertPips(symbol, self.unrealizedPLStop))
-            # profitTarget pips are not converted with toPips! 
+            plot = Chart(f'{ticker}')
+            plot.AddSeries(Series("emaFast", SeriesType.Line, 0))
+            plot.AddSeries(Series("emaSlow", SeriesType.Line, 0))
+            plot.AddSeries(Series("price", SeriesType.Line, 0))
+            plot.AddSeries(Series("long entry", SeriesType.Scatter, 0))
+            plot.AddSeries(Series("short entry", SeriesType.Scatter, 0))
+            plot.AddSeries(Series("close all", SeriesType.Scatter, 0))
+            self.AddChart(plot)
+
 
         warmupPeriod = int(self.GetParameter("ema-slow"))
         self.SetWarmUp(warmupPeriod, Resolution.Hour)
+
+        plPlot = Chart(f'runningPL')
+        plPlot.AddSeries(Series("total PL", SeriesType.Line, 0))
+        plPlot.AddSeries(Series("unrealized PL", SeriesType.Line, 0))
+        self.AddChart(plPlot)
             
             
     def OnData(self, data):
@@ -64,6 +76,7 @@ class TrendGrid(QCAlgorithm):
                 
                 if totalPL >= symData.profitTarget or unrealizedPL < symData.unrealizedPLStop:
                     self.Log(f'--- Profit target / PL stop reached on long {symbol} | total PL: {totalPL} | unrealized: {unrealizedPL}---')
+                    self.Plot(f'{symbol}', 'close all', price)
                     self.closeAll(symbol)
                 
                 elif price < symData.prevLine:
@@ -78,6 +91,7 @@ class TrendGrid(QCAlgorithm):
                 
                 if totalPL >= symData.profitTarget or unrealizedPL < symData.unrealizedPLStop:
                     self.Log(f'--- Profit target / PL stop reached on short {symbol} | total PL: {totalPL} | unrealized: {unrealizedPL}---')
+                    self.Plot(f'{symbol}', 'close all', price)
                     self.closeAll(symbol)
 
                 elif price > symData.prevLine:
@@ -94,11 +108,13 @@ class TrendGrid(QCAlgorithm):
                     symData.profitTarget = round(symData.atr.Current.Value * self.profitTargetATRs, 4)
 
                 if emaFast < emaSlow and (price - gs) < emaFast:
+                    self.Plot(f'{symbol}', 'long entry', price)
                     symbolGridParams(gs)
                     self.Log(f'Initial long with {symbol} @ {price} | Grid spacing: {symData.gridSpace} | uPL stop: {symData.unrealizedPLStop} | Profit target: {symData.profitTarget}')
                     self.tradeLong(symbol)
                     symData.gridStart = self.Time
                 elif emaFast > emaSlow and (price + gs) > emaFast:
+                    self.Plot(f'{symbol}', 'short entry', price)
                     symbolGridParams(gs)
                     self.Log(f'Initial short with {symbol} @ {price} | Grid spacing: {symData.gridSpace} | uPL stop: {symData.unrealizedPLStop} | Profit target: {symData.profitTarget}')
                     self.tradeShort(symbol)
@@ -116,7 +132,20 @@ class TrendGrid(QCAlgorithm):
                 self.Log(f'{symbol} - min grid hours: {minGridTime}')
                 self.Log(f'{symbol} - max grid hours: {maxGridTime}')
                 self.Log(f'{symbol} - avg grid hours: {avgGridTime}')
-                    
+
+            
+            self.Plot(f'{symbol}', 'emaFast', symData.emaFast.Current.Value)
+            self.Plot(f'{symbol}', 'emaSlow', symData.emaSlow.Current.Value)
+            self.Plot(f'{symbol}', 'price', price)
+
+        try:
+            self.Plot('runningPL', 'total PL', totalPL)
+            self.Plot('runningPL', 'unrealized PL', unrealizedPL)
+        except:
+            pass
+
+
+             
 
                     
     def OnOrderEvent(self, orderEvent):
