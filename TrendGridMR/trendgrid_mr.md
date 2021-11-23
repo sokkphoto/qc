@@ -21,4 +21,4 @@ profit target
 + profit-target and unrealized-pl-stop to use ATR units
 
 - entry filter - if 30 day high/low reached in last x hours, no entry
-
+-- 
