@@ -21,4 +21,12 @@ profit target
 + profit-target and unrealized-pl-stop to use ATR units
 
 - entry filter - if 30 day high/low reached in last x hours, no entry
+
+
++ add dynamic profit target based on distance from VSlow, review charts
+- add param for entry condition - distance from VSlow, review charts
+
+- opt unrealizedPL (EURCHF)
+- run volatility check for 2020-21 again
+- opt to get best pairs
 -- 
