@@ -14,14 +14,11 @@ class TrendGrid(QCAlgorithm):
         self.maxOpen = int(self.GetParameter("max-open"))
         self.profitTargetATRs = int(self.GetParameter("profit-target-atrs"))
         self.unrealizedPLStopATRs = int(self.GetParameter("unrealized-pl-stop-atrs"))
-        #self.PLStop = int(self.GetParameter("pl-stop"))
-        self.emaExp = float(self.GetParameter("opt-ema-exp"))
-        # self.emaFast = int(10 ** self.emaExp)
-        # self.emaSlow = int(50 ** self.emaExp)
-    
         self.emaFast = int(self.GetParameter("ema-fast"))
         self.emaSlow = int(self.GetParameter("ema-slow"))
+        self.emaVSlow = int(self.GetParameter("ema-v-slow"))
         self.atrPeriod = self.emaSlow
+        self.pairInList = int(self.GetParameter("pair-in-list"))
 
         self.SetBrokerageModel(BrokerageName.OandaBrokerage)
 
@@ -30,15 +27,19 @@ class TrendGrid(QCAlgorithm):
 
         self.Data = {}
 
-        for ticker in ["EURCHF"]:
+        pairs = ["EURCHF", "EURUSD", "CADJPY"]
+        pairs = [pairs[self.pairInList]]
+
+        for ticker in pairs:
             symbol = self.AddForex(ticker , Resolution.Hour, Market.Oanda).Symbol
             self.Log('Initializing data for ' + str(symbol))
 
             emaFast = self.EMA(symbol, self.emaFast, Resolution.Hour)
             emaSlow = self.EMA(symbol, self.emaSlow, Resolution.Hour)
+            emaVSlow = self.EMA(symbol, self.emaVSlow, Resolution.Hour)
             atr = self.ATR(symbol, int(self.atrPeriod), MovingAverageType.Simple, Resolution.Hour)
 
-            self.Data[symbol] = SymbolData(emaFast, emaSlow, atr)
+            self.Data[symbol] = SymbolData(emaFast, emaSlow, emaVSlow, atr)
             
             plot = Chart(f'{ticker}')
             plot.AddSeries(Series("emaFast", SeriesType.Line, 0))
@@ -68,6 +69,7 @@ class TrendGrid(QCAlgorithm):
             price = data[symbol].Close
             emaFast = symData.emaFast.Current.Value
             emaSlow = symData.emaSlow.Current.Value
+            emaVSlow = symData.emaVSlow.Current.Value
             
             
             if self.Portfolio[symbol].IsLong:
@@ -107,13 +109,13 @@ class TrendGrid(QCAlgorithm):
                     symData.unrealizedPLStop = round(symData.atr.Current.Value * self.unrealizedPLStopATRs, 4)
                     symData.profitTarget = round(symData.atr.Current.Value * self.profitTargetATRs, 4)
 
-                if emaFast < emaSlow and (price - gs) < emaFast:
+                if emaSlow < (emaVSlow - (2*gs)) and emaFast > emaSlow:
                     self.Plot(f'{symbol}', 'long entry', price)
                     symbolGridParams(gs)
                     self.Log(f'Initial long with {symbol} @ {price} | Grid spacing: {symData.gridSpace} | uPL stop: {symData.unrealizedPLStop} | Profit target: {symData.profitTarget}')
                     self.tradeLong(symbol)
                     symData.gridStart = self.Time
-                elif emaFast > emaSlow and (price + gs) > emaFast:
+                elif emaSlow > (emaVSlow + (2*gs)) and emaFast < emaSlow:
                     self.Plot(f'{symbol}', 'short entry', price)
                     symbolGridParams(gs)
                     self.Log(f'Initial short with {symbol} @ {price} | Grid spacing: {symData.gridSpace} | uPL stop: {symData.unrealizedPLStop} | Profit target: {symData.profitTarget}')
@@ -265,9 +267,10 @@ class TrendGrid(QCAlgorithm):
             
 class SymbolData:
     
-    def __init__(self, emaFast, emaSlow, atr):
+    def __init__(self, emaFast, emaSlow, emaVSlow, atr):
         self.emaFast = emaFast
         self.emaSlow = emaSlow
+        self.emaVSlow = emaVSlow
         self.atr = atr
         self.openEntries = []
         self.tpCount = 0
