@@ -24,7 +24,10 @@ profit target
 
 
 + add dynamic profit target based on distance from VSlow, review charts
-- add param for entry condition - distance from VSlow, review charts
++ add param for entry condition - distance from VSlow, review charts
++ tried exit based on reverse ema cross, no good
+
++ try entry filter - if min/max reached in last x hours, no entry
 
 - opt unrealizedPL (EURCHF)
 - run volatility check for 2020-21 again

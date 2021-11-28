@@ -5,8 +5,8 @@ import pandas as pd
 class VolatilityCheck(QCAlgorithm):
 
     def Initialize(self):
-        self.SetStartDate(2021, 9, 1)
-        self.endDate = datetime.date(2021, 10, 1)
+        self.SetStartDate(2020, 1, 1)
+        self.endDate = datetime.date(2021, 1, 1)
         self.SetEndDate(self.endDate)
         self.SetCash(10000)
         
@@ -21,7 +21,7 @@ class VolatilityCheck(QCAlgorithm):
         headers = ['symbol', 'min_long', 'max_long', 'min_short', 'max_short', 'avg_long', 'avg_short', 'long_short_ratio']
         self.results = self.results.reindex(columns = headers)
 
-        for ticker in ["GBPJPY", "EURUSD"]:
+        for ticker in ['AUDCAD', 'AUDCHF', 'AUDHKD', 'AUDJPY', 'AUDNZD', 'AUDSGD', 'AUDUSD', 'CADCHF', 'CADHKD', 'CADJPY', 'CADSGD', 'CHFHKD', 'CHFJPY', 'CHFZAR', 'EURAUD', 'EURCAD', 'EURCHF', 'EURCZK', 'EURDKK', 'EURGBP', 'EURHKD', 'EURHUF', 'EURJPY', 'EURNOK', 'EURNZD', 'EURPLN', 'EURSEK', 'EURSGD', 'EURTRY', 'EURUSD', 'EURZAR', 'GBPAUD', 'GBPCAD', 'GBPCHF', 'GBPHKD', 'GBPJPY', 'GBPNZD', 'GBPPLN', 'GBPSGD', 'GBPUSD', 'GBPZAR', 'HKDJPY', 'NZDCAD', 'NZDCHF', 'NZDHKD', 'NZDJPY', 'NZDSGD', 'NZDUSD', 'SGDCHF', 'SGDJPY', 'TRYJPY', 'USDCAD', 'USDCHF', 'USDCNH', 'USDCZK', 'USDDKK', 'USDHKD', 'USDHUF', 'USDJPY', 'USDMXN', 'USDNOK', 'USDPLN', 'USDSEK', 'USDSGD', 'USDTHB', 'USDTRY', 'USDZAR', 'ZARJPY']:
             symbol = self.AddForex(ticker , Resolution.Hour, Market.Oanda).Symbol
             self.Log('Initializing data for ' + str(symbol))
 
@@ -38,7 +38,7 @@ class VolatilityCheck(QCAlgorithm):
             plot.AddSeries(Series("maxShort", SeriesType.Line, 0))
             plot.AddSeries(Series("minShort", SeriesType.Line, 0))
             plot.AddSeries(Series("price", SeriesType.Line, 0))
-            self.AddChart(plot)
+            # self.AddChart(plot)
     
             
         warmupPeriod = int(self.GetParameter("long-period"))
@@ -56,10 +56,10 @@ class VolatilityCheck(QCAlgorithm):
             rangeLong = (rangeLong / data[symbol].Close) * 100
             rangeShort = (rangeShort / data[symbol].Close) * 100
             
-            self.Plot(f'{symbol}', 'maxLong', symData.maxLong.Current.Value)
-            self.Plot(f'{symbol}', 'minLong', symData.minLong.Current.Value)
-            self.Plot(f'{symbol}', 'maxShort', symData.maxShort.Current.Value)
-            self.Plot(f'{symbol}', 'minShort', symData.minShort.Current.Value)
+            # self.Plot(f'{symbol}', 'maxLong', symData.maxLong.Current.Value)
+            # self.Plot(f'{symbol}', 'minLong', symData.minLong.Current.Value)
+            # self.Plot(f'{symbol}', 'maxShort', symData.maxShort.Current.Value)
+            # self.Plot(f'{symbol}', 'minShort', symData.minShort.Current.Value)
             # self.Plot(f'{symbol}', 'price', data[symbol].Close)
             
             symData.rangesLong.append(rangeLong)
