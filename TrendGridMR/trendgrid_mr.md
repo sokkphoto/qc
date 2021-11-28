@@ -29,6 +29,8 @@ profit target
 
 + try entry filter - if min/max reached in last x hours, no entry
 
++ add entry distance as param
+
 - opt unrealizedPL (EURCHF)
 - run volatility check for 2020-21 again
 - opt to get best pairs

@@ -13,6 +13,7 @@ class TrendGrid(QCAlgorithm):
         self.orderQuantity = int(self.GetParameter("order-quantity"))
         self.gridSpaceAtr = float(self.GetParameter("grid-space-atr"))
         self.maxOpen = int(self.GetParameter("max-open"))
+        self.entryDistATRs = float(self.GetParameter("entry-dist-atrs"))
         self.profitTargetATRs = int(self.GetParameter("profit-target-atrs"))
         self.unrealizedPLStopATRs = int(self.GetParameter("unrealized-pl-stop-atrs"))
         self.emaFast = int(self.GetParameter("ema-fast"))
@@ -119,6 +120,7 @@ class TrendGrid(QCAlgorithm):
                         self.tradeShort(symbol)
 
             if not self.Portfolio[symbol].Invested:
+                entryDist = round(symData.atr.Current.Value * self.entryDistATRs, 4)
                 gs = round(symData.atr.Current.Value * self.gridSpaceAtr, 4)
                 def symbolGridParams(gs):
                     symData.gridSpace = gs
@@ -128,13 +130,13 @@ class TrendGrid(QCAlgorithm):
                     symData.profitTarget = round(abs(self.vSlowDistanceToTarget * (emaVSlow - price)), 4)
                     symData.unrealizedPLStop = - (self.targetToUPL * symData.profitTarget)
 
-                if emaSlow < (emaVSlow - (2 * gs)) and emaFast > emaSlow and self.minMaxCooldown(symbol) == False:
+                if emaSlow < (emaVSlow - entryDist) and emaFast > emaSlow and self.minMaxCooldown(symbol) == False:
                     self.Plot(f'{symbol}', 'long entry', price)
                     symbolGridParams(gs)
                     self.Log(f'Initial long with {symbol} @ {price} | Grid spacing: {symData.gridSpace} | uPL stop: {symData.unrealizedPLStop} | Profit target: {symData.profitTarget}')
                     self.tradeLong(symbol)
                     symData.gridStart = self.Time
-                elif emaSlow > (emaVSlow + (2 * gs)) and emaFast < emaSlow and self.minMaxCooldown(symbol) == False:
+                elif emaSlow > (emaVSlow + entryDist) and emaFast < emaSlow and self.minMaxCooldown(symbol) == False:
                     self.Plot(f'{symbol}', 'short entry', price)
                     symbolGridParams(gs)
                     self.Log(f'Initial short with {symbol} @ {price} | Grid spacing: {symData.gridSpace} | uPL stop: {symData.unrealizedPLStop} | Profit target: {symData.profitTarget}')
