@@ -5,31 +5,27 @@ import datetime
 class TrendGrid(QCAlgorithm):
 
     def Initialize(self):
-        self.SetStartDate(2021, 1, 1)
-        self.endDate = datetime.date(2021, 10, 29)
+        self.SetStartDate(2021, 11, 1)
+        self.endDate = datetime.date(2021, 11, 29)
         self.SetEndDate(self.endDate)
         self.SetCash(10000)
         
         self.orderQuantity = int(self.GetParameter("order-quantity"))
         self.gridSpaceAtr = float(self.GetParameter("grid-space-atr"))
         self.maxOpen = int(self.GetParameter("max-open"))
-        # self.entryDistATRs = float(self.GetParameter("entry-dist-atrs"))
+        self.entryDistATRs = float(self.GetParameter("entry-dist-atrs"))
         self.profitTargetATRs = int(self.GetParameter("profit-target-atrs"))
         self.unrealizedPLStopATRs = int(self.GetParameter("unrealized-pl-stop-atrs"))
-        self.emaFast = int(self.GetParameter("ema-fast"))
         self.emaSlow = int(self.GetParameter("ema-slow"))
-        self.emaVSlow = int(self.GetParameter("ema-v-slow"))
-        self.atrPeriod = self.emaVSlow
-        self.minMaxPeriod = int(self.GetParameter("min-max-period"))
-        self.minMaxCooldownHours = int(self.GetParameter("min-max-cooldown-hours"))
-        # self.vSlowDistanceToTarget = float(self.GetParameter("vslowdist-target-ratio"))
-        # self.targetToUPL = float(self.GetParameter("target-upl-ratio"))
+        self.bbPeriod = int(self.GetParameter("bb-period"))
+        self.atrPeriod = int(self.GetParameter("atr-period"))
+        self.targetToUPL = float(self.GetParameter("target-upl-ratio"))
         self.pairInList = int(self.GetParameter("pair-in-list"))
 
         self.SetBrokerageModel(BrokerageName.OandaBrokerage)
 
         self.Log('--- PARAMS ---')
-        self.Log(f'grid-space-atr: {self.gridSpaceAtr} | profit-target-atrs: {self.profitTargetATRs} | unrealized-pl-stop-atrs: {self.unrealizedPLStopATRs} | max-open: {self.maxOpen} | ema-fast: {self.emaFast} | ema-slow: {self.emaSlow}')
+        self.Log(f'grid-space-atr: {self.gridSpaceAtr} | unrealized-pl-stop-atrs: {self.unrealizedPLStopATRs} | max-open: {self.maxOpen} | ema-slow: {self.emaSlow}')
 
         self.Data = {}
 
@@ -37,20 +33,16 @@ class TrendGrid(QCAlgorithm):
         # pairs = [pairs[self.pairInList]]
 
         for ticker in pairs:
-            symbol = self.AddForex(ticker , Resolution.Minute, Market.Oanda).Symbol
+            symbol = self.AddForex(ticker , Resolution.Hour, Market.Oanda).Symbol
             self.Log('Initializing data for ' + str(symbol))
 
-            emaFast = self.EMA(symbol, self.emaFast, Resolution.Minute)
-            emaSlow = self.EMA(symbol, self.emaSlow, Resolution.Minute)
-            emaVSlow = self.EMA(symbol, self.emaVSlow, Resolution.Minute)
+            emaSlow = self.EMA(symbol, self.emaSlow, Resolution.Hour)
+            bb = self.BB(symbol, int(self.GetParameter("bb-period")), float(self.GetParameter("bb-stddev")), Resolution.Hour)
             atr = self.ATR(symbol, int(self.atrPeriod), MovingAverageType.Simple, Resolution.Hour)
-            min = self.MIN(symbol, self.minMaxPeriod, Resolution.Minute)
-            max = self.MAX(symbol, self.minMaxPeriod, Resolution.Minute)
 
-            self.Data[symbol] = SymbolData(emaFast, emaSlow, emaVSlow, atr, min, max)
+            self.Data[symbol] = SymbolData(emaSlow, bb, atr)
             
             plot = Chart(f'{ticker}')
-            plot.AddSeries(Series("emaFast", SeriesType.Line, 0))
             plot.AddSeries(Series("emaSlow", SeriesType.Line, 0))
             plot.AddSeries(Series("price", SeriesType.Line, 0))
             plot.AddSeries(Series("long entry", SeriesType.Scatter, 0))
@@ -60,7 +52,7 @@ class TrendGrid(QCAlgorithm):
 
 
         warmupPeriod = int(self.GetParameter("ema-slow"))
-        self.SetWarmUp(warmupPeriod, Resolution.Minute)
+        self.SetWarmUp(warmupPeriod, Resolution.Hour)
 
         plPlot = Chart(f'runningPL')
         plPlot.AddSeries(Series("total PL", SeriesType.Line, 0))
@@ -75,24 +67,41 @@ class TrendGrid(QCAlgorithm):
         for symbol, symData in self.Data.items():
             
             price = data[symbol].Close
-            emaFast = symData.emaFast.Current.Value
             emaSlow = symData.emaSlow.Current.Value
-            emaVSlow = symData.emaVSlow.Current.Value
-            
+            bbMid = symData.bb.MiddleBand.Current.Value
+            bbUpper = symData.bb.UpperBand.Current.Value
+            bbLower = symData.bb.LowerBand.Current.Value
+
+            # --- entry ---
+            if not self.Portfolio[symbol].Invested:
+                # entryDist = round(symData.atr.Current.Value * self.entryDistATRs, 4)
+
+                def symbolGridParams():
+                    symData.gridSpace = round(symData.atr.Current.Value * self.gridSpaceAtr, 4)
+
+                if bbMid > emaSlow and price < bbLower:
+                    symbolGridParams()
+                    self.Plot(f'{symbol}', 'long entry', price)
+                    self.Log(f'Initial long with {symbol} @ {price} | Grid spacing: {symData.gridSpace} | EMA slow: {emaSlow} | BB mid: {bbMid}')
+                    self.tradeLong(symbol)
+                    symData.gridStart = self.Time
+                elif bbMid < emaSlow and price > bbUpper:
+                    symbolGridParams()
+                    self.Plot(f'{symbol}', 'short entry', price)
+                    self.Log(f'Initial short with {symbol} @ {price} | Grid spacing: {symData.gridSpace} | EMA slow: {emaSlow} | BB mid: {bbMid}')
+                    self.tradeShort(symbol)
+                    symData.gridStart = self.Time
+
+            # --- exit ---
             if self.Portfolio[symbol].IsLong:
                 unrealizedPL = self.unrealizedPL(price, symData.openEntries, 1)
                 totalPL = round(unrealizedPL + self.realizedPL(symbol, symData.tpCount), 4)
                 
-                if (totalPL >= symData.profitTarget) or unrealizedPL < symData.unrealizedPLStop:
-                    self.Log(f'--- Profit target / PL stop reached on long {symbol} | total PL: {totalPL} | unrealized: {unrealizedPL}---')
+                if bbMid < emaSlow:
+                    self.Log(f'--- BB mid below EMA on long {symbol} | total PL: {totalPL} | unrealized: {unrealizedPL}---')
                     self.Plot(f'{symbol}', 'close all', price)
                     self.closeAll(symbol)
                     
-                # elif emaFast < emaSlow:
-                #     self.Log(f'--- EMA cross, exiting | total PL: {totalPL} | unrealized: {unrealizedPL}---')
-                #     self.Plot(f'{symbol}', 'close all', price)
-                #     self.closeAll(symbol)
-                
                 elif price < symData.prevLine:
                     self.Log(f'Lower line hit on long {symbol} @ {price}')
                     self.Log(f'Total PL: {totalPL} | Unrealized PL: {unrealizedPL}| Open: {symData.openEntries}')
@@ -103,15 +112,10 @@ class TrendGrid(QCAlgorithm):
                 unrealizedPL = self.unrealizedPL(price, symData.openEntries, -1)
                 totalPL = unrealizedPL + self.realizedPL(symbol, symData.tpCount)
                 
-                if (totalPL >= symData.profitTarget) or unrealizedPL < symData.unrealizedPLStop:
-                    self.Log(f'--- Profit target / PL stop reached on short {symbol} | total PL: {totalPL} | unrealized: {unrealizedPL}---')
+                if bbMid > emaSlow:
+                    self.Log(f'--- BB mid above EMA on short {symbol} | total PL: {totalPL} | unrealized: {unrealizedPL}---')
                     self.Plot(f'{symbol}', 'close all', price)
                     self.closeAll(symbol)
-                    
-                # elif emaFast > emaSlow:
-                #     self.Log(f'--- EMA cross, exiting | total PL: {totalPL} | unrealized: {unrealizedPL}---')
-                #     self.Plot(f'{symbol}', 'close all', price)
-                #     self.closeAll(symbol)
 
                 elif price > symData.prevLine:
                     self.Log(f'Upper line hit on short {symbol} @ {price}')
@@ -119,24 +123,7 @@ class TrendGrid(QCAlgorithm):
                     if self.checkEntries(symbol, price, symData.openEntries) == None:
                         self.tradeShort(symbol)
 
-            if not self.Portfolio[symbol].Invested:
-                gs = round(symData.atr.Current.Value * self.gridSpaceAtr, 4)
-                    
-                symData.unrealizedPLStop = round(symData.atr.Current.Value * self.unrealizedPLStopATRs, 4)
-                symData.profitTarget = round(symData.atr.Current.Value * self.profitTargetATRs, 4)
 
-                if emaSlow > emaVSlow and emaFast > emaSlow and price < emaFast:
-                    symData.gridSpace = gs
-                    self.Plot(f'{symbol}', 'long entry', price)
-                    self.Log(f'Initial long with {symbol} @ {price} | Grid spacing: {symData.gridSpace} | uPL stop: {symData.unrealizedPLStop} | Profit target: {symData.profitTarget}')
-                    self.tradeLong(symbol)
-                    symData.gridStart = self.Time
-                elif emaSlow < emaVSlow and emaFast < emaSlow and price > emaFast:
-                    symData.gridSpace = gs
-                    self.Plot(f'{symbol}', 'short entry', price)
-                    self.Log(f'Initial short with {symbol} @ {price} | Grid spacing: {symData.gridSpace} | uPL stop: {symData.unrealizedPLStop} | Profit target: {symData.profitTarget}')
-                    self.tradeShort(symbol)
-                    symData.gridStart = self.Time
 
             # log grid times in h
             def average(lst):
@@ -152,7 +139,6 @@ class TrendGrid(QCAlgorithm):
             #     self.Log(f'{symbol} - avg grid hours: {avgGridTime}')
 
             
-            self.Plot(f'{symbol}', 'emaFast', symData.emaFast.Current.Value)
             self.Plot(f'{symbol}', 'emaSlow', symData.emaSlow.Current.Value)
             self.Plot(f'{symbol}', 'price', price)
 
@@ -296,13 +282,10 @@ class TrendGrid(QCAlgorithm):
             
 class SymbolData:
     
-    def __init__(self, emaFast, emaSlow, emaVSlow, atr, min, max):
-        self.emaFast = emaFast
+    def __init__(self, emaSlow, bb, atr):
         self.emaSlow = emaSlow
-        self.emaVSlow = emaVSlow
+        self.bb = bb
         self.atr = atr
-        self.min = min
-        self.max = max
         self.openEntries = []
         self.tpCount = 0
         self.gridHours = []
