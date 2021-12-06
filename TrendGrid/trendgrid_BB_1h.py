@@ -5,8 +5,8 @@ import datetime
 class TrendGrid(QCAlgorithm):
 
     def Initialize(self):
-        self.SetStartDate(2021, 11, 1)
-        self.endDate = datetime.date(2021, 11, 29)
+        self.SetStartDate(2021, 1, 1)
+        self.endDate = datetime.date(2021, 11, 28)
         self.SetEndDate(self.endDate)
         self.SetCash(10000)
         
@@ -33,7 +33,7 @@ class TrendGrid(QCAlgorithm):
         # pairs = [pairs[self.pairInList]]
 
         for ticker in pairs:
-            symbol = self.AddForex(ticker , Resolution.Hour, Market.Oanda).Symbol
+            symbol = self.AddForex(ticker , Resolution.Minute, Market.Oanda).Symbol
             self.Log('Initializing data for ' + str(symbol))
 
             emaSlow = self.EMA(symbol, self.emaSlow, Resolution.Hour)
@@ -42,22 +42,25 @@ class TrendGrid(QCAlgorithm):
 
             self.Data[symbol] = SymbolData(emaSlow, bb, atr)
             
-            plot = Chart(f'{ticker}')
-            plot.AddSeries(Series("emaSlow", SeriesType.Line, 0))
-            plot.AddSeries(Series("price", SeriesType.Line, 0))
-            plot.AddSeries(Series("long entry", SeriesType.Scatter, 0))
-            plot.AddSeries(Series("short entry", SeriesType.Scatter, 0))
-            plot.AddSeries(Series("close all", SeriesType.Scatter, 0))
-            self.AddChart(plot)
+            #plot = Chart(f'{ticker}')
+            #plot.AddSeries(Series("emaSlow", SeriesType.Line, 0))
+            #plot.AddSeries(Series("price", SeriesType.Line, 0))
+            #plot.AddSeries(Series("long entry", SeriesType.Scatter, 0))
+            #plot.AddSeries(Series("short entry", SeriesType.Scatter, 0))
+            #plot.AddSeries(Series("close all", SeriesType.Scatter, 0))
+            #plot.AddSeries(Series("mid", SeriesType.Line, 0))
+            #plot.AddSeries(Series("upper", SeriesType.Line, 0))
+            #plot.AddSeries(Series("lower", SeriesType.Line, 0))
+            #self.AddChart(plot)
 
 
-        warmupPeriod = int(self.GetParameter("ema-slow"))
+        warmupPeriod = int(max(self.bbPeriod, self.emaSlow))
         self.SetWarmUp(warmupPeriod, Resolution.Hour)
 
-        plPlot = Chart(f'runningPL')
-        plPlot.AddSeries(Series("total PL", SeriesType.Line, 0))
-        plPlot.AddSeries(Series("unrealized PL", SeriesType.Line, 0))
-        self.AddChart(plPlot)
+        #plPlot = Chart(f'runningPL')
+        #plPlot.AddSeries(Series("total PL", SeriesType.Line, 0))
+        #plPlot.AddSeries(Series("unrealized PL", SeriesType.Line, 0))
+        #self.AddChart(plPlot)
             
             
     def OnData(self, data):
@@ -78,16 +81,18 @@ class TrendGrid(QCAlgorithm):
 
                 def symbolGridParams():
                     symData.gridSpace = round(symData.atr.Current.Value * self.gridSpaceAtr, 4)
+                    symData.unrealizedPLStop = round(symData.atr.Current.Value * self.unrealizedPLStopATRs, 4)
+                    symData.profitTarget = round(symData.atr.Current.Value * self.profitTargetATRs, 4)
 
-                if bbMid > emaSlow and price < bbLower:
+                if bbMid < emaSlow and price > bbUpper:
                     symbolGridParams()
-                    self.Plot(f'{symbol}', 'long entry', price)
+                    #self.Plot(f'{symbol}', 'long entry', price)
                     self.Log(f'Initial long with {symbol} @ {price} | Grid spacing: {symData.gridSpace} | EMA slow: {emaSlow} | BB mid: {bbMid}')
                     self.tradeLong(symbol)
                     symData.gridStart = self.Time
-                elif bbMid < emaSlow and price > bbUpper:
+                elif bbMid > emaSlow and price < bbLower:
                     symbolGridParams()
-                    self.Plot(f'{symbol}', 'short entry', price)
+                    #self.Plot(f'{symbol}', 'short entry', price)
                     self.Log(f'Initial short with {symbol} @ {price} | Grid spacing: {symData.gridSpace} | EMA slow: {emaSlow} | BB mid: {bbMid}')
                     self.tradeShort(symbol)
                     symData.gridStart = self.Time
@@ -97,9 +102,11 @@ class TrendGrid(QCAlgorithm):
                 unrealizedPL = self.unrealizedPL(price, symData.openEntries, 1)
                 totalPL = round(unrealizedPL + self.realizedPL(symbol, symData.tpCount), 4)
                 
-                if bbMid < emaSlow:
-                    self.Log(f'--- BB mid below EMA on long {symbol} | total PL: {totalPL} | unrealized: {unrealizedPL}---')
-                    self.Plot(f'{symbol}', 'close all', price)
+                if (bbMid < emaSlow and totalPL > symData.profitTarget) or unrealizedPL < symData.unrealizedPLStop :
+                    self.Log(f'--- Closing on long {symbol} | total PL: {totalPL} | unrealized: {unrealizedPL}---')
+                    if bbMid < emaSlow: self.Log('EMA cross')
+                    if unrealizedPL < symData.unrealizedPLStop : self.Log('uPL hit')
+                    #self.Plot(f'{symbol}', 'close all', price)
                     self.closeAll(symbol)
                     
                 elif price < symData.prevLine:
@@ -112,9 +119,11 @@ class TrendGrid(QCAlgorithm):
                 unrealizedPL = self.unrealizedPL(price, symData.openEntries, -1)
                 totalPL = unrealizedPL + self.realizedPL(symbol, symData.tpCount)
                 
-                if bbMid > emaSlow:
-                    self.Log(f'--- BB mid above EMA on short {symbol} | total PL: {totalPL} | unrealized: {unrealizedPL}---')
-                    self.Plot(f'{symbol}', 'close all', price)
+                if (bbMid > emaSlow and totalPL > symData.profitTarget) or unrealizedPL < symData.unrealizedPLStop:
+                    self.Log(f'--- Closing on short {symbol} | total PL: {totalPL} | unrealized: {unrealizedPL}---')
+                    if bbMid > emaSlow: self.Log('EMA cross')
+                    if unrealizedPL < symData.unrealizedPLStop : self.Log('uPL hit')
+                    #self.Plot(f'{symbol}', 'close all', price)
                     self.closeAll(symbol)
 
                 elif price > symData.prevLine:
@@ -139,17 +148,17 @@ class TrendGrid(QCAlgorithm):
             #     self.Log(f'{symbol} - avg grid hours: {avgGridTime}')
 
             
-            self.Plot(f'{symbol}', 'emaSlow', symData.emaSlow.Current.Value)
-            self.Plot(f'{symbol}', 'price', price)
+            #self.Plot(f'{symbol}', 'emaSlow', symData.emaSlow.Current.Value)
+            #self.Plot(f'{symbol}', 'mid', symData.bb.MiddleBand.Current.Value)
+            #self.Plot(f'{symbol}', 'upper', symData.bb.UpperBand.Current.Value)
+            #self.Plot(f'{symbol}', 'lower', symData.bb.LowerBand.Current.Value)
 
-        try:
-            self.Plot('runningPL', 'total PL', totalPL)
-            self.Plot('runningPL', 'unrealized PL', unrealizedPL)
-        except:
-            pass
+        #try:
+        #    self.Plot('runningPL', 'total PL', totalPL)
+        #    self.Plot('runningPL', 'unrealized PL', unrealizedPL)
+        #except:
+        #    pass
 
-
-             
 
                     
     def OnOrderEvent(self, orderEvent):
