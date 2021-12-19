@@ -14,6 +14,11 @@ if BBmid < emaSlow
 
 ## Analysis
 
-- test with different profit-targets
++ test with different profit-targets
+
+- think of a better exit strat.
+price < ema is ok for a bad (jan-apr) market, but false exit signals in a good market (sept-nov). also allows false entries.
+look on daily? RSI?
+
 - opt: pairs, gridspace; walk winning pairs 2017-2019
 - review charts of winning pairs for best ema, bb, stddev

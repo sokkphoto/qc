@@ -102,9 +102,9 @@ class TrendGrid(QCAlgorithm):
                 unrealizedPL = self.unrealizedPL(price, symData.openEntries, 1)
                 totalPL = round(unrealizedPL + self.realizedPL(symbol, symData.tpCount), 4)
                 
-                if (bbMid < emaSlow and totalPL > symData.profitTarget) or unrealizedPL < symData.unrealizedPLStop :
+                if (price < emaSlow and totalPL > symData.profitTarget) or unrealizedPL < symData.unrealizedPLStop :
                     self.Log(f'--- Closing on long {symbol} | total PL: {totalPL} | unrealized: {unrealizedPL}---')
-                    if bbMid < emaSlow: self.Log('EMA cross')
+                    if price < emaSlow: self.Log('EMA cross')
                     if unrealizedPL < symData.unrealizedPLStop : self.Log('uPL hit')
                     #self.Plot(f'{symbol}', 'close all', price)
                     self.closeAll(symbol)
@@ -119,9 +119,9 @@ class TrendGrid(QCAlgorithm):
                 unrealizedPL = self.unrealizedPL(price, symData.openEntries, -1)
                 totalPL = unrealizedPL + self.realizedPL(symbol, symData.tpCount)
                 
-                if (bbMid > emaSlow and totalPL > symData.profitTarget) or unrealizedPL < symData.unrealizedPLStop:
+                if (price > emaSlow and totalPL > symData.profitTarget) or unrealizedPL < symData.unrealizedPLStop:
                     self.Log(f'--- Closing on short {symbol} | total PL: {totalPL} | unrealized: {unrealizedPL}---')
-                    if bbMid > emaSlow: self.Log('EMA cross')
+                    if price > emaSlow: self.Log('EMA cross')
                     if unrealizedPL < symData.unrealizedPLStop : self.Log('uPL hit')
                     #self.Plot(f'{symbol}', 'close all', price)
                     self.closeAll(symbol)
