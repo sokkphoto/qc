@@ -50,3 +50,31 @@ https://www.elearnmarkets.com/blog/know-5-important-volatility-indicators
 
 - mean reversion methods? trade to revert to slow EMA?
 - signals for trending pairs? supertrend? MACD
+
+-----
+
+- cli backtest
+
+Hi all,
+
+Following the examples at https://www.quantconnect.com/forum/discussion/10658/how-to-run-a-backtest-over-multiple-forex-pairs/p1
+attempting to set up an algo to work with multiple forex pairs.
+
+Turns out Lean CLI does not like the way the algo tries to 
+
+        for ticker in ["NZDUSD","EURUSD"]:
+           symbol = self.AddForex(ticker , Resolution.Hour).Symbol
+           self.Log('Initializing data for ' + str(symbol))
+           self.Data[symbol] = SymbolData(
+                self.EMA(symbol, int(self.GetParameter("ema-fast")), Resolution.Hour),
+                self.EMA(symbol, emaSpeedMid, Resolution.Hour),
+                self.EMA(symbol, emaSpeedSlow, Resolution.Hour),
+                self.ATR(symbol, int(self.GetParameter("atr")), MovingAverageType.Simple, Resolution.Hour),
+                self.ADX(symbol, int(self.GetParameter("adx-period")), Resolution.Hour))
+
+This results in an error:
+
+20210912 13:07:06.180 ERROR:: During the algorithm initialization, the following exception has occurred: 
+ApiDataProvider(): Must be subscribed to map and factor files to use the ApiDataProviderto download Equity data from 
+QuantConnect. in ApiDataProvider.cs:line 220 ApiDataProvider(): Must be subscribed to map and factor files to use the 
+ApiDataProviderto download Equity data from QuantConnect.
